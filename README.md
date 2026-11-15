@@ -9,6 +9,19 @@ Panel web de **consulta** del estado de camas e internaciones del Instituto Lana
 
 > **Este repositorio no contiene datos de pacientes.** La página lee la planilla de Google *“SOLICITUD DE CAMAS PARA INTERNACION”* en el momento de cada consulta, a través de un Google Apps Script, y solo después de verificar el acceso. Nunca subas exports, Excel ni CSV con datos (el `.gitignore` los bloquea).
 
+- **Rechazos guardia:** estadísticas de los rechazos informados por la guardia: por mes, motivo, falta de camas por área, hora y turno, diagnósticos, origen, pacientes rechazados más de una vez, y un detalle filtrable.
+
+## Rechazos desde la guardia (carga automática)
+
+- La tabla vive en la hoja **“Rechazos guardia Lanari”**, en la cuenta institucional franzosi.ricardo@lanari.uba.ar, compartida **en modo lectura** con la cuenta que publica el panel.
+- El script [`apps-script/Rechazos.gs`](apps-script/Rechazos.gs) corre ahí **todos los días a las 7:00**:
+  - lee los mails de `guardia@lanari.uba.ar` que dicen “rechazo” y agrega una fila por rechazo;
+  - aplica las anulaciones marcando el rechazo original como “Anulado”;
+  - lo que no puede interpretar lo deja como **“A revisar”**, para corregirlo a mano en la hoja.
+- No toca la bandeja: no marca como leído ni etiqueta. Los mails procesados quedan registrados en la pestaña PROCESADOS.
+- Solo lee el **texto del mail**, no los PDF adjuntos.
+- La base histórica (enero a noviembre de 2026) se importó del archivo depurado.
+
 ## Cómo funciona el acceso
 
 1. La persona ingresa su mail **@lanari.uba.ar**.

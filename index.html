@@ -108,6 +108,23 @@ td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace}
 .warn{background:#fdf6e7;border:1px solid #f2d9a8;color:#7a5410;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px}
 .hbar{display:flex;height:14px;border-radius:3px;overflow:hidden;min-width:120px;background:#f0f1ee}
 .hbar i{display:block;height:100%}
+
+.rfil{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;font-size:13px}
+.rfil select{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.vbars{display:flex;align-items:flex-end;gap:10px;height:210px;padding:10px 4px 0;border-bottom:1px solid var(--line)}
+.vbar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:26px;cursor:pointer}
+.vbar .stk{width:100%;max-width:46px;display:flex;flex-direction:column-reverse;border-radius:4px 4px 0 0;overflow:hidden}
+.vbar .stk i{display:block}
+.vbar b{font-family:"IBM Plex Mono",monospace;font-size:12px;margin-bottom:3px}
+.vbar.sel .stk{outline:2px solid var(--ink);outline-offset:1px}
+.vlab{display:flex;gap:10px;padding:4px 4px 0}.vlab span{flex:1;min-width:26px;text-align:center;font-size:11px;color:var(--muted)}
+.hrow{display:grid;grid-template-columns:minmax(150px,240px) 1fr 70px;gap:10px;align-items:center;padding:4px 0;font-size:13px}
+.hrow .tr{background:#f0f1ee;border-radius:3px;height:14px;overflow:hidden}.hrow .tr i{display:block;height:100%}
+.hrow .v{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:12px}
+.hours{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;align-items:end;height:110px}
+.hours i{display:block;background:#d9776b;border-radius:2px 2px 0 0;min-height:2px}
+.hlab{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;font-size:10px;color:var(--muted);text-align:center;margin-top:3px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
 input[type=file]{display:none}
 .login{text-align:left;max-width:440px}
 .login input{display:block;width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin:6px 0 12px}
@@ -147,6 +164,7 @@ label.btn{display:inline-block}
     <a href="#movimientos">Movimientos y agenda</a>
     <a href="#espera">Espera y suspensiones</a>
     <a href="#indicadores">Indicadores</a>
+    <a href="#rechazos">Rechazos guardia</a>
   </nav>
 </header>
 <main id="main"><div class="state"><h2>Cargando…</h2></div></main>
@@ -407,13 +425,45 @@ const L = (() => {
     return rows.slice(1).filter(r => r && norm(r[I.n])).map(r => ({ ts: fechaMDA(r[I.ts]), cama: norm(r[I.cama]), nombre: norm(r[I.n]), estudio: norm(r[I.est]), traslado: norm(r[I.tras]), prioridad: up(r[I.pr]), estado: norm(r[I.e]) }));
   }
 
+
+  // ---------- Rechazos desde la guardia ----------
+  function parseRechazos(rows) {
+    if (!rows || rows.length < 2) return null;
+    const hi = rows.findIndex(r => (r || []).some(v => strip(v) === 'CATEGORIA DE MOTIVO'));
+    if (hi < 0) return null;
+    const h = rows[hi].map(norm);
+    const I = { n: col(h, 'N°'), f: col(h, 'FECHA'), hora: col(h, 'HORA'), mes: col(h, 'MES'), pac: col(h, 'PACIENTE'), dni: col(h, 'DNI'),
+      tipo: col(h, 'TIPO'), cat: col(h, 'CATEGORIA'), mot: col(h, 'MOTIVO DEL'), dx: col(h, 'DIAGNOSTICO'), donde: col(h, 'DONDE'), est: col(h, 'ESTADO'), obs: col(h, 'OBSERVACION') };
+    const out = [];
+    rows.slice(hi + 1).forEach(r => {
+      if (!r || !norm(r[I.pac]) && !norm(r[I.f])) return;
+      const mes = parseInt(norm(r[I.mes]), 10) || null;
+      let f = r[I.f];
+      if (!(f instanceof Date)) {
+        const s = norm(f); let m;
+        if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) f = new Date(+m[1], +m[2] - 1, +m[3]);
+        else if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))) {
+          let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+          // desambiguar D/M vs M/D con la columna Mes
+          f = mes && a === mes && b !== mes ? new Date(y, a - 1, b) : new Date(y, b - 1, a);
+        } else f = null;
+      }
+      const hm = norm(r[I.hora] instanceof Date ? r[I.hora].toTimeString() : r[I.hora]).match(/^(\d{1,2}):(\d{2})/);
+      const donde = norm(r[I.donde]);
+      out.push({ n: norm(r[I.n]), fecha: f, mes: mes || (f ? f.getMonth() + 1 : null), hora: hm ? +hm[1] : null, paciente: norm(r[I.pac]), dni: norm(r[I.dni]).replace(/\D/g, ''),
+        tipo: norm(r[I.tipo]), cat: norm(r[I.cat]) || 'No especificado', motivo: norm(r[I.mot]), dx: norm(r[I.dx]) || 'No consignado', donde,
+        origen: !donde ? 'No consignado' : /^hospital/i.test(donde) ? 'Otro hospital' : /^ambulancia/i.test(donde) ? 'Ambulancia' : /lanari/i.test(donde) ? 'Guardia Lanari' : 'Otro',
+        vigente: !/anulad/i.test(norm(r[I.est])), estado: norm(r[I.est]), obs: norm(r[I.obs]) });
+    });
+    return out;
+  }
   function analizar(book) {
     const listado = parseListado(findSheet(book, 'LISTADO DIARIO') || []);
     const peds = parsePedidos(findSheet(book, 'Pedidos') || []);
     return {
       listado, camas: resumenCamas(listado), pedidos: peds, susp: suspensiones(peds), rep: repetidos(peds), meses: porMes(peds),
       agenda: parseAgenda(findSheet(book, 'AGENDA') || []), guardia: parseGuardia(findSheet(book, 'GUARDIA') || []),
-      camilleros: parseCamilleros(findSheet(book, 'CAMILLEROS') || []), hojas: Object.keys(book),
+      camilleros: parseCamilleros(findSheet(book, 'CAMILLEROS') || []), rechazos: parseRechazos(findSheet(book, 'RECHAZOS') || findSheet(book, 'Rechazos') || []), hojas: Object.keys(book),
     };
   }
   return { parseTextExport, parseCSV, analizar, SECTORES, fmt, dayKey, fechaDMA, fechaMDA };
@@ -566,7 +616,7 @@ $('#fileIn').onchange = async ev => {
 $('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari_priv', PRIV ? '1' : '0'); } catch (e) {} render(); };
 
 /* ---------- Render ---------- */
-const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores'];
+const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'rechazos'];
 function view() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'mapa'; }
 window.addEventListener('hashchange', render);
 function render() {
@@ -574,7 +624,8 @@ function render() {
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + view()));
   if (!DATA) return;
   const v = view();
-  $('#main').innerHTML = ({ mapa: vMapa, movimientos: vMov, espera: vEspera, indicadores: vInd })[v]();
+  $('#main').innerHTML = ({ mapa: vMapa, movimientos: vMov, espera: vEspera, indicadores: vInd, rechazos: vRech })[v]();
+  if (v === 'rechazos') bindRech();
   bindTips();
 }
 const cls = s => String(s).replace(/\s+/g, '_');
@@ -708,6 +759,81 @@ function vInd() {
     <tr><td>Campo Motivo sobrescrito con “cancelada/suspendida”</td><td class="num">${P.filter(p => /^\W*(cancel|suspend)/i.test(p.motivo)).length}</td></tr>
     <tr><td>Observaciones vacías o “-”</td><td class="num">${P.filter(p => !p.obs || p.obs === '-').length}</td></tr>
   </table></div></div>`;
+}
+
+/* ---------- Rechazos desde la guardia ---------- */
+let RF = { mes: 'all', cat: 'all' };
+const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const CAT_COL = { 'Falta de camas': '#c0392b', 'Instrumental / insumos / equipamiento': '#b7791f', 'Falta de especialista de guardia': '#6b46c1', 'Sin tomógrafo': '#1f6fb2', 'Ascensor inhabilitado': '#5f6b66', 'Falta de complejidad': '#0f5e6e', 'Sin ambulancia': '#8a5a12', 'No especificado': '#aab3ae' };
+const catCol = c => CAT_COL[c] || '#9aa7a1';
+function hbars(entries, total, color) {
+  const mx = Math.max(1, ...entries.map(e => e[1]));
+  return entries.map(([k, v]) => `<div class="hrow"><span>${esc(k)}</span><div class="tr"><i style="width:${v / mx * 100}%;background:${typeof color === 'function' ? color(k) : color}"></i></div><span class="v">${v}${total ? ' · ' + Math.round(v / total * 100) + '%' : ''}</span></div>`).join('');
+}
+const countBy = (arr, f) => { const o = {}; arr.forEach(x => { const k = f(x); if (k != null) o[k] = (o[k] || 0) + 1; }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
+function vRech() {
+  const R = DATA.rechazos;
+  if (!R) return `<div class="state"><h2>Sin datos de rechazos</h2><p>No encontré la pestaña de rechazos (con la columna “Categoría de motivo”) en los datos cargados.</p></div>`;
+  const vig = R.filter(r => r.vigente), anul = R.length - vig.length, aRev = R.filter(r => /revisar/i.test(r.estado)).length;
+  const per = vig.filter(r => RF.mes === 'all' || r.mes === +RF.mes);
+  const sel = per.filter(r => RF.cat === 'all' || r.cat === RF.cat);
+  const fc = per.filter(r => r.cat === 'Falta de camas');
+  const fcUti = fc.filter(r => /UTI/i.test(r.motivo)).length;
+  const area = r => { const s = r.motivo.toLowerCase(), a = [];
+    if (/uti/.test(s)) a.push('UTI'); if (/sala/.test(s)) a.push('Sala general'); if (/guardia externa/.test(s)) a.push('Guardia externa'); if (/instituci/.test(s)) a.push('Toda la institución');
+    return a.length === 0 ? 'Sin especificar área' : a.length === 1 ? a[0] : 'Combinada: ' + a.join(' + '); };
+  const dxs = countBy(per, r => r.dx); const dxNC = (dxs.find(e => e[0] === 'No consignado') || [0, 0])[1];
+  const meses = [...new Set(R.map(r => r.mes).filter(Boolean))].sort((a, b) => a - b);
+  const byMes = meses.map(m => { const x = vig.filter(r => r.mes === m); return { m, total: x.length, uti: x.filter(r => r.cat === 'Falta de camas' && /UTI/i.test(r.motivo)).length, cama: x.filter(r => r.cat === 'Falta de camas' && !/UTI/i.test(r.motivo)).length }; });
+  byMes.forEach(b => b.otros = b.total - b.uti - b.cama);
+  const mx = Math.max(1, ...byMes.map(b => b.total));
+  const ult = byMes[byMes.length - 1], prev = byMes[byMes.length - 2];
+  const reps = countBy(per.filter(r => r.dni || r.paciente), r => r.dni || r.paciente).filter(e => e[1] > 1);
+  const pacOf = k => per.find(r => (r.dni || r.paciente) === k);
+  const dows = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']; const dowC = Array(7).fill(0); per.forEach(r => { if (r.fecha) dowC[(r.fecha.getDay() + 6) % 7]++; });
+  const hrC = Array(24).fill(0); per.forEach(r => { if (r.hora != null) hrC[r.hora]++; }); const hmx = Math.max(1, ...hrC);
+  const turno = { 'Mañana (7–13)': 0, 'Tarde (13–19)': 0, 'Noche (19–7)': 0 }; per.forEach(r => { if (r.hora == null) return; turno[r.hora >= 7 && r.hora < 13 ? 'Mañana (7–13)' : r.hora >= 13 && r.hora < 19 ? 'Tarde (13–19)' : 'Noche (19–7)']++; });
+  const perLbl = RF.mes === 'all' ? 'todo 2026' : MESES[RF.mes - 1];
+  return `<div class="rfil"><b>Período:</b>
+      <select id="rfMes"><option value="all">Todo el año</option>${meses.map(m => `<option value="${m}" ${+RF.mes === m ? 'selected' : ''}>${MESES[m - 1]}</option>`).join('')}</select>
+      <span class="note" style="margin:0">Estadísticas sobre rechazos <b>vigentes</b> (se excluyen ${anul} anulados). Fuente: mails de guardia, cargados automáticamente cada día a las 7:00.${aRev ? ` <span class="tag w">${aRev} a revisar en la planilla</span>` : ''}</span></div>
+    <div class="kpis">
+      <div class="kpi"><b>${per.length}</b><span>Rechazos vigentes · ${esc(perLbl)}</span></div>
+      <div class="kpi" style="border-color:#e8b4ad"><b style="color:#c0392b">${per.length ? Math.round(fc.length / per.length * 100) : 0}%</b><span>Por falta de camas (${fc.length})</span></div>
+      <div class="kpi"><b>${fcUti}</b><span>Falta de camas que involucra UTI</span></div>
+      <div class="kpi"><b>${RF.mes === 'all' ? (vig.length / Math.max(1, meses.length)).toFixed(1) : (per.length / 30 * 7).toFixed(1)}</b><span>${RF.mes === 'all' ? 'Promedio por mes' : 'Promedio por semana'}</span></div>
+      ${RF.mes === 'all' && ult ? `<div class="kpi"><b>${ult.total}</b><span>${MESES[ult.m - 1]} (mes en curso)${prev ? ' · ' + MESES[prev.m - 1] + ': ' + prev.total : ''}</span></div>` : ''}
+      <div class="kpi"><b>${reps.length}</b><span>Pacientes rechazados más de una vez</span></div>
+    </div>
+    <div class="card"><h2>Rechazos vigentes por mes</h2><div class="sub">Tocá un mes para filtrar todo el tablero.
+      <span class="sw" style="background:#7f1d1d"></span>Falta de camas en UTI<span class="sw" style="background:#e07a6e"></span>Falta de camas (sala / institución / guardia)<span class="sw" style="background:#c9cfcb"></span>Otros motivos</div>
+      <div class="vbars">${byMes.map(b => `<div class="vbar ${+RF.mes === b.m ? 'sel' : ''}" data-mes="${b.m}" title="${MESES[b.m - 1]}: ${b.total} (UTI ${b.uti}, otras camas ${b.cama}, otros ${b.otros})"><b>${b.total}</b><div class="stk" style="height:${b.total / mx * 170}px">
+        <i style="height:${b.uti / Math.max(1, b.total) * 100}%;background:#7f1d1d"></i><i style="height:${b.cama / Math.max(1, b.total) * 100}%;background:#e07a6e"></i><i style="height:${b.otros / Math.max(1, b.total) * 100}%;background:#c9cfcb"></i></div></div>`).join('')}</div>
+      <div class="vlab">${byMes.map(b => `<span>${MESES[b.m - 1]}</span>`).join('')}</div></div>
+    <div class="grid2">
+      <div class="card"><h2>Motivo del rechazo</h2><div class="sub">Categoría principal · ${esc(perLbl)}</div>${hbars(countBy(per, r => r.cat), per.length, catCol)}</div>
+      <div class="card"><h2>Detalle de la falta de camas</h2><div class="sub">${fc.length} rechazos por falta de camas</div>${hbars(countBy(fc, area), fc.length, '#c0392b')}</div>
+      <div class="card"><h2>¿Cuándo se rechaza?</h2><div class="sub">Por hora del día</div>
+        <div class="hours">${hrC.map((v, h) => `<i title="${h}:00 – ${v}" style="height:${v / hmx * 100}%"></i>`).join('')}</div>
+        <div class="hlab">${hrC.map((v, h) => `<span>${h % 3 === 0 ? h : ''}</span>`).join('')}</div>
+        <div style="margin-top:12px">${hbars(Object.entries(turno), per.length, '#d9776b')}</div>
+        <div style="margin-top:8px">${hbars(dows.map((d, i) => [d, dowC[i]]), 0, '#9aa7a1')}</div></div>
+      <div class="card"><h2>Diagnósticos más frecuentes</h2><div class="sub">Top 10 · ${esc(perLbl)} · ${dxNC} sin diagnóstico consignado</div>${hbars(dxs.filter(e => e[0] !== 'No consignado').slice(0, 10), per.length, '#0f5e6e')}</div>
+      <div class="card"><h2>¿Dónde aguardaba el paciente?</h2><div class="sub">Origen del pedido</div>${hbars(countBy(per, r => r.origen), per.length, '#1f6fb2')}
+        <div class="sub" style="margin-top:10px">Lugares más frecuentes</div>${hbars(countBy(per.filter(r => r.donde), r => r.donde).slice(0, 8), 0, '#7aa6d1')}</div>
+      <div class="card"><h2>Pacientes rechazados más de una vez</h2><div class="sub">${reps.length} pacientes · ${esc(perLbl)}</div><div class="tw" style="max-height:330px">
+        <table><tr><th>Paciente</th><th class="num">Rechazos</th><th>Fechas</th><th>Motivos</th></tr>${reps.map(([k, n]) => { const xs = per.filter(r => (r.dni || r.paciente) === k); const p = pacOf(k);
+          return `<tr><td>${nm(p.paciente, p.dni)}</td><td class="num"><b>${n}</b></td><td>${xs.map(r => F(r.fecha).slice(0, 5)).join(', ')}</td><td>${[...new Set(xs.map(r => r.motivo))].map(esc).join('; ')}</td></tr>`; }).join('') || '<tr><td colspan="4" class="empty">Ninguno.</td></tr>'}</table></div></div>
+    </div>
+    <div class="card"><h2>Detalle de rechazos</h2><div class="rfil" style="margin:6px 0 8px"><b>Motivo:</b><select id="rfCat"><option value="all">Todos</option>${countBy(per, r => r.cat).map(([c]) => `<option ${RF.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="note" style="margin:0">${sel.length} rechazos</span></div>
+      <div class="tw"><table><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Motivo</th><th>Diagnóstico</th><th>Dónde aguardaba</th></tr>
+      ${sel.slice().sort((a, b) => (b.fecha || 0) - (a.fecha || 0)).map(r => `<tr><td>${F(r.fecha)}</td><td class="mono">${r.hora != null ? String(r.hora).padStart(2, '0') + 'h' : ''}</td><td>${nm(r.paciente, r.dni)}</td><td>${esc(r.tipo.replace('Rechazo ', '').replace(/^./, c => c.toUpperCase()))}</td>
+        <td><span class="tag" style="background:${catCol(r.cat)}22;color:${catCol(r.cat)}">${esc(r.cat)}</span><br><span style="color:var(--muted);font-size:12px">${esc(r.motivo)}</span></td><td>${esc(r.dx)}</td><td>${esc(r.donde || '—')}</td></tr>`).join('')}</table></div></div>`;
+}
+function bindRech() {
+  const m = $('#rfMes'); if (m) m.onchange = () => { RF.mes = m.value; RF.cat = 'all'; render(); };
+  const c = $('#rfCat'); if (c) c.onchange = () => { RF.cat = c.value; render(); };
+  document.querySelectorAll('.vbar').forEach(b => b.onclick = () => { RF.mes = String(RF.mes) === b.dataset.mes ? 'all' : b.dataset.mes; RF.cat = 'all'; render(); });
 }
 /* Tooltip */
 function bindTips() {

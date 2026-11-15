@@ -13,6 +13,7 @@
 
 const CONFIG = {
   SHEET_ID: '1L19hyfd_YLGOj_i8JP092XHVeFHASh973aiVOFMozew',
+  RECHAZOS_ID: '1qLReNN5bl_zUT3ul8DCuk-BKhg7jiGihm4h56LjlxwM', // hoja "Rechazos guardia Lanari" (cuenta del Lanari, compartida en lectura)
   DOMINIO: 'lanari.uba.ar',
   HOJA_ACCESO: 'ACCESO',          // opcional: lista blanca de mails en la columna A
   HOJA_LOG: 'LOG ACCESOS',        // opcional: si existe, se registran ingresos y consultas
@@ -121,6 +122,10 @@ function datos_(token) {
     if (CONFIG.HOJAS_EXCLUIDAS.indexOf(nombre) >= 0) return;
     hojas[nombre] = sh.getDataRange().getDisplayValues();
   });
+  if (CONFIG.RECHAZOS_ID) {
+    try { hojas['RECHAZOS GUARDIA'] = SpreadsheetApp.openById(CONFIG.RECHAZOS_ID).getSheetByName('RECHAZOS').getDataRange().getDisplayValues(); }
+    catch (err) { console.warn('Rechazos no disponibles: ' + err); }
+  }
   log_(email, 'consulta');
   return { ok: true, email: email, generado: new Date().toISOString(), hojas: hojas };
 }
