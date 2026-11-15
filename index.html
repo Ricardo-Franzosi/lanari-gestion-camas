@@ -222,7 +222,9 @@ const L = (() => {
     { id: 'p2', nombre: '2º piso clínica', matriz: 21, grupos: [
       { nombre: 'Habitaciones 19–30', camas: r(19, 30) },
       { nombre: 'Camas D–F', camas: ['D', 'E', 'F'] },
-      { nombre: 'Hemodinamia', camas: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'] } ] },
+      { nombre: 'Hemodinamia (D1–D2)', camas: ['D1', 'D2'] },
+      { nombre: 'Internación general (D3–D4)', camas: ['D3', 'D4'] },
+      { nombre: 'Trasplante (D5–D6)', camas: ['D5', 'D6'] } ] },
     { id: 'uti', nombre: 'UTI', matriz: 8, grupos: [
       { nombre: 'Terapia', camas: ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', '31', '32'] } ] },
     { id: 'g', nombre: 'Guardia', matriz: null, grupos: [
@@ -615,7 +617,7 @@ function vMapa() {
       <span style="--c:#1f8a5b;">Libre</span><span style="--c:var(--ocup-bg)">Ocupada</span><span style="--c:var(--alta-bg)">Alta / libera cama</span>
       <span style="--c:var(--pase-bg)">Pase</span><span style="--c:var(--esp-bg)">Esperando cama / ing. cancelado</span><span class="lg-aisl" style="--c:#fff">Borde rojo = aislamiento</span></div>
     <div class="sectors">${sects}</div>${prog}
-    <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (con Hemodinamia D1–D6) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. Hemodinamia se ubicó en el 2º piso porque así cierra la cuenta de 21 camas; está pendiente de confirmar.</p>`;
+    <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (incluye D1–D2 Hemodinamia, D3–D4 Internación general y D5–D6 Trasplante, según la pestaña CAMAS) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. </p>`;
 }
 function bed(c) {
   const a = c.aisl && c.aisl !== 'SIN AISLAMIENTO';
