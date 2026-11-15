@@ -1216,7 +1216,7 @@ const SERVICIOS = [
   { n: 'Traumatología', c: /^traumatolog/i, cir: /^traumatolog/i },
   { n: 'Cirugía', c: /^cirug/i, cir: /^(general|t[oó]rax|pl[aá]stica|vascular|cabeza y cuello|maxilofacial)$/i },
   { n: 'Cardiología', c: /^(cardiolog|insuficiencia cardiaca|control de ma.?capaso|electrofisiolog)/i, cir: /^cardiovascular$/i, esp: 'Cardiología', prac: /estudio/i },
-  { n: 'Hemodinamia', c: /^consultorio hemodinamia/i },
+  { n: 'Hemodinamia', c: /^consultorio hemodinamia/i, pracGen: /^hemodinamia$/i },
   { n: 'Hematología', c: /^hematolog/i, de: /hematolog/i },
   { n: 'Reumatología', c: /^reumatolog/i, de: /reumatolog/i },
   { n: 'Urología', c: /^urolog/i, cir: /^urolog/i },
@@ -1258,6 +1258,7 @@ function indServicios(E, anio) {
     const de = sumN(A.sde, n), cir = sumN(A.scir, n), cirP = B ? sumN(B.scir, n) : null;
     // Prácticas: tabla de la planilla de la especialidad, mismo año y mismos meses
     let prac = null, pracFuente = '';
+    if (sv.pracGen) { const fs_ = D.estudios.filter(x => sv.pracGen.test(x.label.trim())); if (fs_.length) { prac = fs_.reduce((s, x) => s + sumN(x.meses, n), 0); pracFuente = 'planilla general, estudios: ' + fs_.map(x => x.label).join(', '); } }
     if (sv.esp && E.especialidades) {
       const e = E.especialidades.find(x => x.nombre === sv.esp), Y = e && e.anios[anio];
       const ts = Y ? Y.tablas.filter(t => sv.prac.test(t.titulo)) : [];
@@ -1302,7 +1303,7 @@ function vEstInd(E) {
       <b>% Instituto</b><span>Consultas del servicio sobre el total de consultas del Instituto (incluye guardia).</span>
       <b>% Dem. esp.</b><span>Demanda espontánea sobre el total de consultas del servicio. Solo donde la planilla la registra aparte.</span>
       <b>Cirugías</b><span>Sección de cirugías por especialidad de la planilla general. «Cirugías c/100 consultas»: cirugías del período por cada 100 consultas del servicio.</span>
-      <b>Prácticas</b><span>Estudios o prácticas de la planilla de la especialidad (Cardiología, Neumonología, Neurología) divididos por las consultas de la planilla general, mismos meses.</span>
+      <b>Prácticas</b><span>Estudios o prácticas de la planilla de la especialidad (Cardiología, Neumonología, Neurología) o, en Hemodinamia, la fila HEMODINAMIA de estudios de la planilla general, divididos por las consultas del servicio, mismos meses.</span>
       <b>Tendencia</b><span>Promedio de los últimos 3 meses contra el de los 3 meses anteriores. El detalle muestra el promedio móvil de 3 meses.</span>
     </div></div>`;
 }
