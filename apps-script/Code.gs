@@ -1,5 +1,5 @@
 /**
- * Gestión de camas · Instituto Lanari
+ * Auditoría Médica y Gestión Hospitalaria Lanari
  * Backend de acceso para el panel publicado en GitHub Pages.
  *
  * - Solo acepta mails @lanari.uba.ar (y, si existe la pestaña "ACCESO", solo los mails listados ahí).
@@ -29,11 +29,11 @@ const CONFIG = {
   SESION_TTL_S: 21600,            // 6 horas (máximo de CacheService)
   MAX_INTENTOS: 5,
   MAX_CODIGOS_POR_HORA: 4,
-  NOMBRE_REMITENTE: 'Gestión de camas · Instituto Lanari',
+  NOMBRE_REMITENTE: 'Auditoría Médica y Gestión Hospitalaria Lanari',
 };
 
 function doGet() {
-  return json_({ ok: true, servicio: 'Gestión de camas Lanari', mensaje: 'Usar POST desde el panel.' });
+  return json_({ ok: true, servicio: 'Auditoría Médica y Gestión Hospitalaria Lanari', mensaje: 'Usar POST desde el panel.' });
 }
 
 function doPost(e) {
@@ -83,11 +83,11 @@ function pedirCodigo_(emailRaw) {
 
   MailApp.sendEmail({
     to: email,
-    subject: 'Código de acceso: ' + codigo + ' · Gestión de camas Lanari',
+    subject: 'Código de acceso: ' + codigo + ' · Auditoría Médica y Gestión Hospitalaria Lanari',
     name: CONFIG.NOMBRE_REMITENTE,
-    body: 'Tu código para ingresar al panel de gestión de camas es: ' + codigo +
+    body: 'Tu código para ingresar al panel de Auditoría Médica y Gestión Hospitalaria Lanari es: ' + codigo +
       '\n\nVence en 10 minutos. Si no lo pediste, ignorá este mensaje.',
-    htmlBody: '<p>Tu código para ingresar al panel de gestión de camas es:</p>' +
+    htmlBody: '<p>Tu código para ingresar al panel de Auditoría Médica y Gestión Hospitalaria Lanari es:</p>' +
       '<p style="font-size:28px;font-weight:bold;letter-spacing:6px;font-family:monospace">' + codigo + '</p>' +
       '<p style="color:#666">Vence en 10 minutos. Si no lo pediste, ignorá este mensaje.</p>',
   });
