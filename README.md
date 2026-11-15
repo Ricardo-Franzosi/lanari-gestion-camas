@@ -9,7 +9,7 @@ Panel web de **consulta** del estado de camas e internaciones del Instituto Lana
   - **Espera y suspensiones:** ingresos de los próximos 14 días, OP pendientes, reprogramaciones y suspensiones por falta de cama.
   - **Indicadores:** pedidos por mes, Sala/UTI, cápita/extracápita y calidad del registro.
 - **Rechazos guardia:** datos que informan los administrativos de guardia (responsable Lorena Iriarte).
-- **Estadísticas:** planillas del Departamento de Estadística recopiladas por Corina Páez: resumen general (2024–2026) y vista interactiva por especialidad, con búsqueda de médicos y prácticas.
+- **Estadísticas:** planillas del Departamento de Estadística recopiladas por Corina Páez: resumen general (2024–2026), **indicadores por servicio** (consultas y variación interanual, participación en el Instituto, % de demanda espontánea, cirugías cada 100 consultas, prácticas por consulta, tendencia de 3 meses y mes pico; ordenables y con detalle de las filas usadas) y vista interactiva por especialidad, con búsqueda de médicos y prácticas.
 
 Las fotos de las responsables de cada área no están en el repositorio: el servidor las envía solo después de iniciar sesión (archivo privado en Drive, `CONFIG.FOTOS_ID`).
 

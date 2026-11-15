@@ -163,6 +163,13 @@ button.lnk,a.lnk{background:none;border:0;color:#0f5e6e;font:inherit;font-size:1
 .aviso{background:#fff6e0;border:1px solid #f0d58a;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:10px 0}
 .art{display:grid;grid-template-columns:70px 1fr;gap:4px 10px;font-size:13.5px}.art b{color:#14322f}
 @media (max-width:760px){.sol-grid{grid-template-columns:1fr}}
+.ind-t th.sortable{cursor:pointer;white-space:nowrap}.ind-t td:first-child{min-width:170px}.ind-t th,.ind-t td{padding-left:8px;padding-right:8px}.ind-t th.sortable.on{color:#0f5e6e}
+.ind-t tr.clk{cursor:pointer}.ind-t tr.clk:hover td{background:#f4f8f6}.ind-t tr.sel td{background:#e8f3f5}
+.ind-t tr.det td{background:#fbfcfb;padding:12px}
+.ind-det{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
+.ind-src{font-size:12.5px}.ind-src p{margin:6px 0;color:var(--muted)}
+.leg{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:4px}.leg i{display:inline-block;width:12px;height:3px;margin-right:5px;vertical-align:middle}
+@media (max-width:760px){.ind-det{grid-template-columns:1fr}}
 .lchart{width:100%;height:auto}
 .lchart text{font-family:"IBM Plex Sans";font-size:11px;fill:#68716d}
 .serie-key{display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:12px;color:var(--muted)}
@@ -1203,6 +1210,112 @@ function tablaComp(items, prevItems, n, titulo, max = 25) {
     return `<tr><td>${esc(k)}</td><td style="width:30%"><div class="hbar"><i style="width:${v / mx * 100}%;background:#0f5e6e"></i></div></td><td class="num">${fmtN(v)}</td><td class="num">${(v / tot * 100).toFixed(1)}</td>
       <td class="num">${d == null ? '<span class="delta eq">—</span>' : `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`}</td></tr>`; }).join('')}</table>`;
 }
+/* ---- Indicadores por servicio (planilla general + prácticas de las planillas por especialidad) ---- */
+// Qué filas de la planilla general forman cada servicio. c: consultas programadas · de: demanda espontánea · cir: cirugías.
+const SERVICIOS = [
+  { n: 'Traumatología', c: /^traumatolog/i, cir: /^traumatolog/i },
+  { n: 'Cirugía', c: /^cirug/i, cir: /^(general|t[oó]rax|pl[aá]stica|vascular|cabeza y cuello|maxilofacial)$/i },
+  { n: 'Cardiología', c: /^(cardiolog|insuficiencia cardiaca|consultorio hemodinamia|control de ma.?capaso|electrofisiolog)/i, cir: /^cardiovascular$/i, esp: 'Cardiología', prac: /estudio/i },
+  { n: 'Hematología', c: /^hematolog/i, de: /hematolog/i },
+  { n: 'Reumatología', c: /^reumatolog/i, de: /reumatolog/i },
+  { n: 'Urología', c: /^urolog/i, cir: /^urolog/i },
+  { n: 'Proctología', c: /^proctolog/i, cir: /^coloproctolog/i },
+  { n: 'Ginecología', c: /^ginecolog/i, de: /ginecolog/i, cir: /^ginecolog/i },
+  { n: 'Dermatología', c: /^dermatolog/i },
+  { n: 'Neumonología', c: /^neumonolog/i, esp: 'Neumonología', prac: /estudio/i },
+  { n: 'Neurología', c: /^neurolog/i, de: /neurolog/i, esp: 'Neurología', prac: /practica/i },
+  { n: 'Endocrinología', c: /^(endocrinolog|control de conducta endocrino)/i, de: /endocrino/i },
+  { n: 'Metabolismo / Nutrición y Diabetes', c: /^(metabolismo|control de conducta metabol|nutrici)/i, de: /metabolismo/i },
+  { n: 'Clínica Médica', c: /^cl[ií]nica m[eé]dica$/i, de: /(cl[ií]nica m[eé]dica|pre\.? ?q)/i },
+  { n: 'Oncología', c: /^(oncolog|cl[ií]nica m[eé]dica oncol)/i, de: /oncolog/i },
+  { n: 'Cuidados Paliativos', c: /^(cuidados paliativos|consultorio dolor)/i, de: /pal[ei]ativ/i },
+  { n: 'Gastroenterología', c: /^(gastroenterolog|consultorio cpre)/i, de: /gastroenterolog/i, cir: /^gastroenterolog/i },
+  { n: 'Infectología', c: /^infectolog/i, de: /infectolog/i },
+  { n: 'Nefrología', c: /^(nefrolog|poliquistosis)/i, de: /nefrolog/i },
+  { n: 'Salud Mental', c: /^salud mental/i },
+  { n: 'Otorrinolaringología', c: /^otorrino/i },
+  { n: 'Neurocirugía', cir: /^neurocirug/i }
+];
+const esDE = l => /^dema[nm]?[dt]a esp/i.test(l);
+function indServicios(E, anio) {
+  const cur = E.anios.find(a => a.anio === anio), prev = E.anios.find(a => a.anio === anio - 1);
+  const D = cur.datos, P = prev && prev.datos, n = D.mesesConDatos || 12;
+  const serie = (d, filas) => Array.from({ length: 12 }, (_, i) => filas.reduce((s, f) => s + (f.meses[i] || 0), 0));
+  const tomar = (d, sv) => {
+    if (!d) return null;
+    const c = sv.c ? d.consultas.filter(x => !esDE(x.label) && !/^guardia/i.test(x.label) && sv.c.test(x.label)) : [];
+    const de = sv.de ? d.consultas.filter(x => esDE(x.label) && sv.de.test(x.label.replace(/^dema[nm]?[dt]a esp\w*\s*/i, ''))) : [];
+    const cir = sv.cir ? d.cirugias.filter(x => sv.cir.test(x.label.trim())) : [];
+    return { c, de, cir, sc: serie(d, c), sde: serie(d, de), scir: serie(d, cir) };
+  };
+  const totInst = D.totales.consultas ? sumN(D.totales.consultas, n) : D.consultas.reduce((s, x) => s + sumN(x.meses, n), 0);
+  const usadas = new Set();
+  const filas = SERVICIOS.map(sv => {
+    const A = tomar(D, sv), B = tomar(P, sv);
+    [...A.c, ...A.de, ...A.cir].forEach(x => usadas.add(x));
+    const cons = sumN(A.sc, n) + sumN(A.sde, n), consP = B ? sumN(B.sc, n) + sumN(B.sde, n) : null;
+    const de = sumN(A.sde, n), cir = sumN(A.scir, n), cirP = B ? sumN(B.scir, n) : null;
+    // Prácticas: tabla de la planilla de la especialidad, mismo año y mismos meses
+    let prac = null, pracFuente = '';
+    if (sv.esp && E.especialidades) {
+      const e = E.especialidades.find(x => x.nombre === sv.esp), Y = e && e.anios[anio];
+      const ts = Y ? Y.tablas.filter(t => sv.prac.test(t.titulo)) : [];
+      if (ts.length) { prac = ts.reduce((s, t) => s + t.filas.reduce((a, f) => a + sumN(f.meses, n), 0), 0); pracFuente = Y.archivo + ' · ' + ts.map(t => t.titulo).join(', '); }
+    }
+    const tot = A.sc.map((v, i) => v + A.sde[i]);
+    const mm3 = tot.map((_, i) => i >= 2 && i < n ? (tot[i] + tot[i - 1] + tot[i - 2]) / 3 : null);
+    const ult3 = n >= 6 ? (tot[n - 1] + tot[n - 2] + tot[n - 3]) / 3 : null, ant3 = n >= 6 ? (tot[n - 4] + tot[n - 5] + tot[n - 6]) / 3 : null;
+    let pico = -1; tot.slice(0, n).forEach((v, i) => { if (pico < 0 || v > tot[pico]) pico = i; });
+    return { sv, A, B, cons, consP, de, cir, cirP, prac, pracFuente, tot, totP: B ? B.sc.map((v, i) => v + B.sde[i]) : null, mm3,
+      varI: consP ? (cons - consP) / consP * 100 : null, part: totInst && cons ? cons / totInst * 100 : null, pDE: A.de.length && cons ? de / cons * 100 : null,
+      conv: A.cir.length && cons ? cir / cons * 100 : null, hayCir: A.cir.length > 0, pxc: prac != null && cons ? prac / cons : null,
+      tend: ult3 != null && ant3 ? (ult3 - ant3) / ant3 * 100 : null, pico: cons ? pico : -1 };
+  }).filter(f => f.cons || f.cir);
+  const sinAsignar = D.consultas.filter(x => !usadas.has(x) && !/^guardia/i.test(x.label) && sumN(x.meses, n) > 0).map(x => x.label)
+    .concat(D.cirugias.filter(x => !usadas.has(x) && sumN(x.meses, n) > 0).map(x => x.label + ' (cirugías)'));
+  return { filas, n, totInst, sinAsignar, hayPrev: !!P, archivo: (E.meta || []).find(m => m.tipo === 'general' && +m.anio === anio) };
+}
+function vEstInd(E) {
+  const anios = E.anios.map(a => a.anio);
+  if (!EF.anio || !anios.includes(EF.anio)) EF.anio = anios[anios.length - 1];
+  const R = indServicios(E, EF.anio), n = R.n;
+  const per = n === 12 ? `año ${EF.anio} completo` : `enero–${MESL[n - 1].toLowerCase()} ${EF.anio}`;
+  const ord = EF.indOrden || 'cons';
+  const val = (f, k) => f[k] == null ? -Infinity : f[k];
+  const filas = R.filas.slice().sort((a, b) => ord === 'nombre' ? a.sv.n.localeCompare(b.sv.n, 'es') : val(b, ord) - val(a, ord));
+  const pc = (v, d = 1) => v == null ? '<span class="delta eq">—</span>' : v.toFixed(d).replace('.', ',') + '%';
+  const dl = v => v == null ? '<span class="delta eq">—</span>' : Math.abs(v) < 0.5 ? '<span class="delta eq">0%</span>' : `<span class="delta ${Math.abs(v) < 1 ? 'eq' : v > 0 ? 'up' : 'dn'}">${v > 0 ? '+' : ''}${v.toFixed(0)}%</span>`;
+  const th = (k, txt, cls = 'num') => `<th class="${cls} sortable${ord === k ? ' on' : ''}" data-ord="${k}">${txt}${ord === k ? ' ▾' : ''}</th>`;
+  const abierto = EF.indAbierto;
+  return `<div class="rfil"><b>Año:</b><select id="eiAnio">${anios.map(a => `<option ${a === EF.anio ? 'selected' : ''}>${a}</option>`).join('')}</select>
+      <span class="note" style="margin:0">Período: <b>${per}</b>${R.hayPrev ? ', comparado con los mismos meses del año anterior' : ' (sin año anterior para comparar)'}. Tocá un servicio para ver el detalle.</span></div>
+    <div class="card"><h2>Indicadores por servicio</h2><div class="sub">Consultas incluye consultorio programado y demanda espontánea. Total del Instituto (con guardia): ${fmtN(R.totInst)} consultas.</div>
+    <div class="tw"><table class="ind-t"><tr>${th('nombre', 'Servicio', '')}${th('cons', 'Consultas')}${th('varI', 'Var. interanual')}${th('part', '% Instituto')}${th('pDE', '% Dem. esp.')}${th('cir', 'Cirugías')}${th('conv', 'Cir. c/100 cons.')}${th('pxc', 'Práct. por cons.')}${th('tend', 'Tend. 3 meses')}<th>Pico</th></tr>
+    ${filas.map(f => `<tr class="clk${abierto === f.sv.n ? ' sel' : ''}" data-sv="${esc(f.sv.n)}"><td><b>${esc(f.sv.n)}</b></td><td class="num">${f.cons ? fmtN(f.cons) : '—'}</td><td class="num">${dl(f.varI)}</td><td class="num">${pc(f.part)}</td><td class="num">${pc(f.pDE)}</td>
+      <td class="num">${f.hayCir ? fmtN(f.cir) : '—'}</td><td class="num">${f.conv != null ? f.conv.toFixed(1).replace('.', ',') : '—'}</td><td class="num">${f.pxc != null ? f.pxc.toFixed(2).replace('.', ',') : '—'}</td><td class="num">${dl(f.tend)}</td><td>${f.pico >= 0 ? MESL[f.pico] : '—'}</td></tr>
+      ${abierto === f.sv.n ? `<tr class="det"><td colspan="10">${detServicio(f, n)}</td></tr>` : ''}`).join('')}</table></div>
+    ${R.sinAsignar.length ? `<p class="note">Filas de la planilla general sin servicio asignado: ${R.sinAsignar.map(esc).join(', ')}.</p>` : ''}</div>
+    <div class="card"><h2>Cómo se calcula cada indicador</h2><div class="art">
+      <b>Consultas</b><span>Suma de las filas de consultas del servicio en la planilla general (${esc(R.archivo ? R.archivo.archivo : 'Estadísticas ' + EF.anio)}), incluida la demanda espontánea, en el período.</span>
+      <b>Var.</b><span>Variación contra los mismos meses del año anterior.</span>
+      <b>% Instituto</b><span>Consultas del servicio sobre el total de consultas del Instituto (incluye guardia).</span>
+      <b>% Dem. esp.</b><span>Demanda espontánea sobre el total de consultas del servicio. Solo donde la planilla la registra aparte.</span>
+      <b>Cirugías</b><span>Sección de cirugías por especialidad de la planilla general. «Cirugías c/100 consultas»: cirugías del período por cada 100 consultas del servicio.</span>
+      <b>Prácticas</b><span>Estudios o prácticas de la planilla de la especialidad (Cardiología, Neumonología, Neurología) divididos por las consultas de la planilla general, mismos meses.</span>
+      <b>Tendencia</b><span>Promedio de los últimos 3 meses contra el de los 3 meses anteriores. El detalle muestra el promedio móvil de 3 meses.</span>
+    </div></div>`;
+}
+function detServicio(f, n) {
+  const filasTxt = (arr, d) => arr.map(x => `${esc(x.label)} (${fmtN(sumN(x.meses, n))})`).join(', ');
+  return `<div class="ind-det"><div>${lineChart([...(f.totP ? [{ name: String(EF.anio - 1), vals: f.totP.map((v, i) => i < 12 ? v : null), color: '#9aa7a1', dash: true, w: 1.8 }] : []),
+      { name: String(EF.anio), vals: f.tot.map((v, i) => i < n ? v : null), color: '#0f5e6e', w: 2.6 },
+      { name: 'Promedio móvil 3 meses', vals: f.mm3, color: '#d08a2e', w: 1.8 }], { H: 190 })}
+      <div class="leg"><span><i style="background:#0f5e6e"></i>${EF.anio}</span>${f.totP ? `<span><i style="background:#9aa7a1"></i>${EF.anio - 1}</span>` : ''}<span><i style="background:#d08a2e"></i>Promedio móvil 3 meses</span></div></div>
+    <div class="ind-src"><b>Filas incluidas (planilla general)</b>
+      ${f.A.c.length ? `<p>Consultas: ${filasTxt(f.A.c)}</p>` : ''}${f.A.de.length ? `<p>Demanda espontánea: ${filasTxt(f.A.de)}</p>` : ''}${f.A.cir.length ? `<p>Cirugías: ${filasTxt(f.A.cir)}</p>` : ''}
+      ${f.prac != null ? `<p>Prácticas: ${fmtN(f.prac)} — ${esc(f.pracFuente)}</p>` : ''}
+      ${f.sv.n === 'Neurocirugía' ? '<p>La planilla general no tiene una fila de consultas de Neurocirugía; por eso no se calculan los indicadores sobre consultas.</p>' : ''}</div></div>`;
+}
 function estDatos() { return ESTAD || (DATA && DATA.estadisticas) || null; }
 async function cargarEst() {
   if (estCargando || !API || !SES) return;
@@ -1228,8 +1341,8 @@ function vEst() {
   const nEspArch = new Set((E.meta || []).filter(m => m.tipo === 'especialidad').map(m => m.archivo)).size;
   const sinc = (E.meta || []).map(m => m.actualizado).filter(Boolean).sort().pop();
   return `${areaCard('estad', `${metaG.map(m => `${m.anio}: ${esc(m.archivo)}`).join('<br>')}${nEspArch ? `<br>${nEspArch} planillas por especialidad` : ''}${sinc ? '<br>Sincronizado: ' + esc(sinc) : ''}`)}
-    <div class="segs" id="estModo">${gen ? `<button data-m="general" class="${EF.modo === 'general' ? 'on' : ''}">Resumen general</button>` : ''}${esp ? `<button data-m="especialidad" class="${EF.modo === 'especialidad' ? 'on' : ''}">Por especialidad</button>` : ''}</div>
-    ${EF.modo === 'general' && gen ? vEstGeneral(E) : esp ? vEstEsp(E) : '<p class="note">No hay planillas por especialidad.</p>'}`;
+    <div class="segs" id="estModo">${gen ? `<button data-m="general" class="${EF.modo === 'general' ? 'on' : ''}">Resumen general</button>` : ''}${gen ? `<button data-m="indicadores" class="${EF.modo === 'indicadores' ? 'on' : ''}">Indicadores por servicio</button>` : ''}${esp ? `<button data-m="especialidad" class="${EF.modo === 'especialidad' ? 'on' : ''}">Por especialidad</button>` : ''}</div>
+    ${EF.modo === 'general' && gen ? vEstGeneral(E) : EF.modo === 'indicadores' && gen ? vEstInd(E) : esp ? vEstEsp(E) : '<p class="note">No hay planillas por especialidad.</p>'}`;
 }
 /* ---- Por especialidad ---- */
 const ultMes = t => { let n = 0; t.filas.forEach(f => f.meses.forEach((v, i) => { if (v) n = Math.max(n, i + 1); })); return n || 12; };
@@ -1369,6 +1482,9 @@ function bindEst() {
   const rt = $('#estRetry'); if (rt) rt.onclick = () => { estError = ''; render(); };
   const s = $('#efAnio'); if (s) s.onchange = () => { EF.anio = +s.value; render(); };
   document.querySelectorAll('#estModo button').forEach(b => b.onclick = () => { EF.modo = b.dataset.m; render(); });
+  const ea = $('#eiAnio'); if (ea) ea.onchange = () => { EF.anio = +ea.value; EF.indAbierto = null; render(); };
+  document.querySelectorAll('.ind-t th.sortable').forEach(h => h.onclick = () => { EF.indOrden = h.dataset.ord; render(); });
+  document.querySelectorAll('.ind-t tr.clk').forEach(r => r.onclick = () => { EF.indAbierto = EF.indAbierto === r.dataset.sv ? null : r.dataset.sv; render(); });
   document.querySelectorAll('#espChips button').forEach(b => b.onclick = () => { EF.esp = b.dataset.e; EF.espAnio = null; if (EF.todas) EF.todas = false; render(); });
   const q = $('#espQ'); if (q) q.oninput = () => { EF.q = q.value; redrawEsp(); };
   const tt = $('#espTodas'); if (tt) tt.onchange = () => { EF.todas = tt.checked; redrawEsp(); };
