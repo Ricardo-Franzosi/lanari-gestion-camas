@@ -1215,7 +1215,8 @@ function tablaComp(items, prevItems, n, titulo, max = 25) {
 const SERVICIOS = [
   { n: 'Traumatología', c: /^traumatolog/i, cir: /^traumatolog/i },
   { n: 'Cirugía', c: /^cirug/i, cir: /^(general|t[oó]rax|pl[aá]stica|vascular|cabeza y cuello|maxilofacial)$/i },
-  { n: 'Cardiología', c: /^(cardiolog|insuficiencia cardiaca|consultorio hemodinamia|control de ma.?capaso|electrofisiolog)/i, cir: /^cardiovascular$/i, esp: 'Cardiología', prac: /estudio/i },
+  { n: 'Cardiología', c: /^(cardiolog|insuficiencia cardiaca|control de ma.?capaso|electrofisiolog)/i, cir: /^cardiovascular$/i, esp: 'Cardiología', prac: /estudio/i },
+  { n: 'Hemodinamia', c: /^consultorio hemodinamia/i },
   { n: 'Hematología', c: /^hematolog/i, de: /hematolog/i },
   { n: 'Reumatología', c: /^reumatolog/i, de: /reumatolog/i },
   { n: 'Urología', c: /^urolog/i, cir: /^urolog/i },
