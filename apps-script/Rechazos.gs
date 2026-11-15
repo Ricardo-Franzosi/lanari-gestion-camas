@@ -100,7 +100,7 @@ function procesar() {
   const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
   const corte = props.getProperty('CORTE') || '';
   const hechos = new Set(pr.getLastRow() > 1 ? pr.getRange(2, 1, pr.getLastRow() - 1, 1).getValues().map(r => String(r[0])) : []);
-  const q = 'from:' + RCFG.REMITENTE + ' (rechazo OR rchazo OR anula OR anulacion OR anulación) newer_than:' + RCFG.VENTANA_DIAS + 'd';
+  const q = 'from:' + RCFG.REMITENTE + ' (rechazo OR rchazo OR rc OR anula OR anulacion OR anulación) newer_than:' + RCFG.VENTANA_DIAS + 'd';
   const msgs = [];
   GmailApp.search(q, 0, 200).forEach(th => th.getMessages().forEach(m => {
     if (m.getFrom().toLowerCase().indexOf(RCFG.REMITENTE) < 0) return;
@@ -129,7 +129,7 @@ function procesarMensaje_(m, th, sh, tz) {
   const url = 'https://mail.google.com/mail/u/0/#all/' + m.getId();
 
   // Anulación
-  if (/\banul(a|o|ar|acion)\b/.test(low) || /anulad/.test(low)) {
+  if (/anul\w*\s+(?:el\s+|del\s+)?(?:rechazo|rc)\b|(?:rechazo|rc)\s+anulad|^\s*anulacion/.test(low)) {
     const ap = apellidoAsunto_(asunto) || apellidoAsunto_(th.getFirstMessageSubject() || '');
     const fila = buscarVigente_(sh, ap, fecha);
     if (fila) {
@@ -140,7 +140,7 @@ function procesarMensaje_(m, th, sh, tz) {
     agregar_(sh, fecha, tz, { paciente: ap || '', tipo: 'Anulación', cat: 'No especificado', motivo: 'Anulación sin rechazo previo encontrado', estado: 'A revisar', obs: cuerpo.slice(0, 200), url });
     return ['Anulación a revisar', ap];
   }
-  if (!/rechaz|rchaz/.test(low)) return ['Ignorado', 'no es rechazo'];
+  if (!/rechaz|rchaz|\brc\b/.test(low)) return ['Ignorado', 'no es rechazo'];
 
   const d = extraer_(asunto, cuerpo);
   // Duplicado: mismo paciente el mismo día
@@ -161,7 +161,7 @@ function extraer_(asunto, cuerpo) {
     let nom = m[1].trim();
     const resto = t.slice(m.index + m[0].length).match(/^,\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2})(?=\s*(?:,|\.|;|\bcon\b|\bDNI\b|\bpor\b|$))/);
     if (resto) nom += ', ' + resto[1];
-    paciente = titulo_(nom);
+    if (!/^(que|el|se|en|para|con)\b/i.test(nom)) paciente = titulo_(nom);
   }
   if (!paciente) paciente = titulo_(apellidoAsunto_(asunto));
   const dni = (t.match(/\bDNI\s*(?:N[°º]?|nro\.?)?\s*:?\s*([\d.]{6,11})/i) || [])[1];
@@ -178,8 +178,9 @@ function extraer_(asunto, cuerpo) {
   if (/sala general/.test(low)) areas.push('sala general');
   if (/guardia externa/.test(low)) areas.push('guardia externa');
   const tomo = /tomograf/.test(low);
-  const esp = low.match(/(?:falta de|sin|no contar con|no hay)\s+(?:medico\s+)?(traumatolog\w*|otorrino\w*|psiquiatr\w*|cirujan\w*|urolog\w*|neurolog\w*|neurocirujan\w*|oftalmolog\w*|especialista\w*|cardiolog\w*|medico\s+\w+)/);
-  const insumo = /(insumo|instrumental|material|equipamiento|protesis|caja quirurgica)/.test(low);
+  const esp = low.match(/(?:falta de|sin|no contar con|no hay)\s+(?:medico\s+)?(traumatolog\w*|otorrino\w*|psiquiatr\w*|ginecolog\w*|cirujan\w*|urolog\w*|neurolog\w*|neurocirujan\w*|oftalmolog\w*|especialista\w*|cardiolog\w*|medico\s+\w+)/);
+  const insumo = /(insumo|instrumental|material|equipamiento|protesis|caja quirurgica|elemento)/.test(low);
+  const quirofano = /quirofano/.test(low);
   let cat = 'No especificado', motivo = '';
   if (cama && !(tomo && low.indexOf('tomograf') < low.search(/cama/))) {
     cat = 'Falta de camas';
@@ -187,6 +188,7 @@ function extraer_(asunto, cuerpo) {
     if (tomo) motivo = 'Falta de camas y sin tomógrafo';
   } else if (tomo) { cat = 'Sin tomógrafo'; motivo = cama ? 'Sin tomógrafo y sin camas' + (areas.length ? ' en ' + areas.join(' y ') : '') : 'Sin tomógrafo disponible'; }
   else if (esp) { cat = 'Falta de especialista de guardia'; motivo = 'Sin ' + esp[1] + ' de guardia'; }
+  else if (quirofano) { cat = 'Instrumental / insumos / equipamiento'; motivo = 'Sin quirófano disponible'; }
   else if (insumo) { cat = 'Instrumental / insumos / equipamiento'; motivo = 'Falta de instrumental / insumos / equipamiento'; }
   else if (/ascensor/.test(low)) { cat = 'Ascensor inhabilitado'; motivo = 'Ascensor inhabilitado'; }
   else if (/complejidad/.test(low)) { cat = 'Falta de complejidad'; motivo = 'Falta de complejidad'; }
@@ -238,7 +240,7 @@ function limpiarCuerpo_(s) {
 }
 function apellidoAsunto_(asunto) {
   const partes = String(asunto || '').toUpperCase().replace(/^(RE|RV|FW|FWD):\s*/g, '').split(/[\/|-]/).map(x => x.trim()).filter(Boolean);
-  const ruido = /^(LANARI|CABA|RECHAZO|RECHAZOS|DERIVACION|DERIVACIÓN|AMBULANCIA|ANULACION|ANULACIÓN|ANULACION RECHAZO|CONFORMADO)$/;
+  const ruido = /^(LANARI|LANRI|LANARO|CABA|RC|RECHAZO|RECHAZOS|DERIVACION|DERIVACIÓN|AMBULANCIA|ANULACION|ANULACIÓN|ANULACION RECHAZO|CONFORMADO)$/;
   const cand = partes.filter(p => !ruido.test(p));
   let ap = cand.length ? cand[cand.length - 1] : '';
   ap = ap.replace(/^(ANULACI[OÓ]N\s+)?(DE\s+)?RECHAZO\s+/, '').trim();
