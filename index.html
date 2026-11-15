@@ -125,6 +125,32 @@ td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace}
 .hours i{display:block;background:#d9776b;border-radius:2px 2px 0 0;min-height:2px}
 .hlab{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;font-size:10px;color:var(--muted);text-align:center;margin-top:3px}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
+
+.credit{display:flex;gap:16px;align-items:center;background:linear-gradient(90deg,#14322f,#1d4a45);color:#eef4f1;border-radius:12px;padding:14px 18px;margin-bottom:14px}
+.credit .av{width:64px;height:64px;border-radius:50%;background:#e3f4ea;color:#14322f;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:22px;flex:none;overflow:hidden;border:2px solid #9fbcb4}
+.credit .av img{width:100%;height:100%;object-fit:cover}
+.credit h2{margin:0;font-size:16px}.credit p{margin:3px 0 0;font-size:12.5px;color:#cfe0da}
+.credit .meta{margin-left:auto;font-size:11.5px;color:#b9cfc8;text-align:right}
+.delta{font-size:11px;font-weight:600;margin-left:6px}.delta.up{color:#1f8a5b}.delta.dn{color:#c0392b}.delta.eq{color:var(--muted)}
+.kpi .delta{display:block;margin:2px 0 0;font-family:"IBM Plex Sans"}
+.segs{display:inline-flex;border:1px solid #cfd8d3;border-radius:9px;overflow:hidden;margin:0 0 12px}
+.segs button{border:0;background:#fff;padding:8px 16px;font:inherit;font-size:13.5px;cursor:pointer;color:#33413c}
+.segs button.on{background:#14322f;color:#fff}
+.esp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.esp-chips button{border:1px solid #cfd8d3;background:#fff;border-radius:18px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
+.esp-chips button small{font-size:10.5px;color:#7a847f}
+.esp-chips button.on{background:#0f5e6e;border-color:#0f5e6e;color:#fff}.esp-chips button.on small{color:#cfe6ea}
+.esp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:14px}
+.esp-card h2{font-size:14.5px}
+.esp-kpi{display:flex;align-items:baseline;gap:10px;margin:4px 0 2px}.esp-kpi b{font-size:24px;color:#14322f}
+.esp-t td,.esp-m td{font-size:12.5px}.esp-m th{font-size:11.5px}.esp-m tr.tot td{border-top:2px solid #cfd8d3;font-weight:600}
+.warn{background:#fff6e0;border:1px solid #f0d58a;color:#6b5210;border-radius:8px;padding:6px 10px;font-size:12px;margin:6px 0}
+button.lnk,a.lnk{background:none;border:0;color:#0f5e6e;font:inherit;font-size:12.5px;cursor:pointer;padding:6px 0;text-decoration:underline}
+@media (max-width:560px){.esp-grid{grid-template-columns:1fr}}
+.lchart{width:100%;height:auto}
+.lchart text{font-family:"IBM Plex Sans";font-size:11px;fill:#68716d}
+.serie-key{display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:12px;color:var(--muted)}
+.serie-key i{width:14px;height:3px;border-radius:2px;display:inline-block}
 input[type=file]{display:none}
 .login{text-align:left;max-width:440px}
 .login input{display:block;width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin:6px 0 12px}
@@ -165,6 +191,7 @@ label.btn{display:inline-block}
     <a href="#espera">Espera y suspensiones</a>
     <a href="#indicadores">Indicadores</a>
     <a href="#rechazos">Rechazos guardia</a>
+    <a href="#estadisticas">Estadísticas</a>
   </nav>
 </header>
 <main id="main"><div class="state"><h2>Cargando…</h2></div></main>
@@ -457,16 +484,193 @@ const L = (() => {
     });
     return out;
   }
+
+  // ---------- Estadísticas (Departamento de Estadística · recopilación Corina Páez) ----------
+  function num(v) {
+    if (typeof v === 'number') return v;
+    let s = norm(v); if (!s || s === '-' || /^#/.test(s)) return null;
+    s = s.replace(/%$/, '');
+    if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+    const n = Number(s); return isFinite(n) ? n : null;
+  }
+  const SECC = { 'CONSULTAS': 'consultas', 'ESPECIALIDADES': 'cirugias', 'INTERNADOS': 'internados', 'AMBULATORIOS': 'hospDia', 'AMBULATORIOS HOSP.': 'hospDia', 'ESTUDIOS': 'estudios' };
+  function parseEstadistica(rows) {
+    const out = { consultas: [], cirugias: [], internados: [], hospDia: [], estudios: [], sociales: null, totales: {} };
+    let sec = null;
+    for (const r of rows || []) {
+      const a = up(r[0]);
+      if (SECC[a.replace(/\s+$/, '')] !== undefined || /^AMBULATORIOS/.test(a)) { sec = SECC[a] || 'hospDia'; continue; }
+      if (!a || /^\d{2}\/\d{2}\//.test(a)) { if (!a && sec && !(r.slice(1, 13).some(v => num(v) !== null))) sec = sec; if (/^\d{2}\//.test(a)) sec = null; continue; }
+      if (!sec) continue;
+      const meses = r.slice(1, 13).map(num);
+      if (!meses.some(v => v !== null)) continue;
+      const label = norm(r[0]);
+      if (/^PACIENTES SOCIALES|^PAC\. SOCIALES/.test(a)) { out.sociales = meses; if (sec !== 'internados') continue; }
+      if (/^TOTAL$/.test(a)) { out.totales[sec] = meses; continue; }
+      if (/^PORCENTAJE/.test(a)) continue;
+      out[sec].push({ label, meses, total: meses.reduce((s, v) => s + (v || 0), 0) });
+    }
+    // meses con datos: según el total de consultas (o la suma de servicios)
+    const base = out.totales.consultas || out.consultas.reduce((acc, x) => acc.map((v, i) => v + (x.meses[i] || 0)), Array(12).fill(0));
+    out.mesesConDatos = base.map(v => (v || 0) > 0).lastIndexOf(true) + 1;
+    return out;
+  }
+  function parseGiro(rows) {
+    const g = [];
+    for (const r of rows || []) {
+      const anio = parseInt(norm(r[0]), 10), mes = norm(r[1]).replace(/\s*\(\*\)/, '');
+      const egr = num(r[2]), camas = num(r[3]), giro = num(r[4]);
+      if (anio > 2000 && mes && egr !== null) g.push({ anio, mes, egresos: egr, camas, giro, parcial: /\(\*\)/.test(norm(r[1])) });
+    }
+    return g;
+  }
+  function parseEstadisticas(book) {
+    const anios = {};
+    Object.keys(book).forEach(k => {
+      const m = k.match(/^EST (\d{4}) (\d+)$/); if (!m) return;
+      const a = +m[1]; anios[a] = anios[a] || { anio: a };
+      const rows = book[k];
+      if (rows.some(r => up(r[0]) === 'CONSULTAS')) anios[a].datos = parseEstadistica(rows);
+      else if (rows.some(r => /EGRE/i.test(norm(r[2])))) anios[a].giro = parseGiro(rows);
+    });
+    const M = book['EST_META'] || [];
+    const nuevo = M[0] && /pesta/i.test(norm(M[0][0]));
+    const meta = M.slice(1).map(r => nuevo ? { pestana: norm(r[0]), tipo: norm(r[1]), anio: +r[2] || null, archivo: norm(r[3]), hoja: norm(r[4]), modificado: norm(r[5]), actualizado: norm(r[6]) }
+      : { tipo: 'general', anio: +r[0], archivo: norm(r[1]), modificado: norm(r[2]), actualizado: norm(r[3]) });
+    const lista = Object.values(anios).filter(x => x.datos).sort((a, b) => a.anio - b.anio);
+    const giro = Object.values(anios).flatMap(x => x.giro || []);
+    const giroUnico = []; const vistos = new Set();
+    giro.forEach(g => { const k = g.anio + g.mes; if (!vistos.has(k)) { vistos.add(k); giroUnico.push(g); } });
+    const especialidades = parseEspecialidades(book, meta);
+    return lista.length || especialidades.length ? { anios: lista, giro: giroUnico, meta, especialidades } : null;
+  }
+  // ---------- Planillas por especialidad (genérico) ----------
+  const MESES_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  const MES_AB = { en: 1, ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ag: 8, ago: 8, sep: 9, sept: 9, set: 9, oct: 10, nov: 11, dic: 12 };
+  function celdaMes(v) {
+    const s = norm(v); let m;
+    if ((m = s.match(/^(\d{4})-(\d{2})-\d{2}/))) return { anio: +m[1], mes: +m[2] };
+    if ((m = s.match(/^([a-z]+)\.?[-\s/](\d{2}|\d{4})$/i))) {
+      const k = m[1].toLowerCase(); const mes = MES_AB[k.slice(0, 4)] || MES_AB[k.slice(0, 3)] || MES_AB[k.slice(0, 2)];
+      if (mes) { let a = +m[2]; if (a < 100) a += 2000; return { anio: a, mes }; }
+    }
+    return null;
+  }
+  const ESPEC = [[/^traumato/, 'Traumatología'], [/^neuroc/, 'Neurocirugía'], [/^neumo/, 'Neumonología'], [/^nefro/, 'Nefrología'], [/^gastro/, 'Gastroenterología'],
+    [/^onco/, 'Oncología'], [/^endocrino/, 'Endocrinología'], [/^cardio/, 'Cardiología'], [/^hemato/, 'Hematología y Reumatología'], [/^imagen/, 'Imágenes'],
+    [/^neuro/, 'Neurología'], [/^serv/, 'Servicio Social'], [/paliativ/, 'Cuidados Paliativos'], [/^metabol/, 'Metabolismo'], [/^cirug/, 'Cirugía'], [/^nutric/, 'Nutrición y Diabetes']];
+  function nombreEspecialidad(titulo) {
+    let t = norm(titulo).replace(/\.xlsx$/i, '').replace(/^(estad[ií]sticas|esta?\.)\s*/i, '').replace(/[\s\d\-–]+$/g, '').trim();
+    const k = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    for (const [re, n] of ESPEC) if (re.test(k)) return n;
+    return t;
+  }
+  const sinAnios = s => norm(s).replace(/\b(19|20)\d{2}\b/g, '').replace(/\b\d{2}\s*-\s*\d{2}\b/g, '').replace(/estad[ií]sticas?/i, '').replace(/\s*[-–]\s*$/, '').replace(/\s+/g, ' ').trim();
+  function esAnio(v) { const n = num(v); return n !== null && n >= 2000 && n <= 2100 && Number.isInteger(n); }
+  function parseTablasHoja(rows, hoja) {
+    const tablas = [];
+    // Formato transpuesto (meses en filas, p. ej. Servicio Social)
+    const filasMes = (rows || []).map((r, i) => MESES_ES.indexOf(up(r && r[0]).replace(/\s+$/, '')) >= 0 ? i : -1).filter(i => i >= 0);
+    if (filasMes.length >= 3) {
+      const i0 = filasMes[0], sub = rows[i0 - 1] || [], grp = rows[i0 - 2] || [];
+      let anio = esAnio(sub[0]) ? num(sub[0]) : (norm(hoja).match(/(20\d\d)/) || [])[1]; anio = anio ? +anio : null;
+      const ancho = Math.max(...rows.slice(i0, i0 + 12).map(r => r.length));
+      let g = ''; const grupos = {};
+      for (let c = 1; c < ancho; c++) {
+        if (norm(grp[c])) g = norm(grp[c]);
+        const lab = norm(sub[c]); if (!lab) continue;
+        const meses = Array(12).fill(null);
+        rows.slice(i0, i0 + 12).forEach(r => { const mi = MESES_ES.indexOf(up(r[0]).replace(/\s+$/, '')); if (mi >= 0) meses[mi] = num(r[c]); });
+        if (!meses.some(v => v !== null)) continue;
+        (grupos[g || 'Datos'] = grupos[g || 'Datos'] || []).push({ label: lab, meses });
+      }
+      Object.entries(grupos).forEach(([titulo, filas]) => tablas.push({ titulo, partes: [titulo], anio, filas, total: null }));
+      return tablas;
+    }
+    let months = null, hdr = '', sec = '', pend = '', tbl = null;
+    const aniosHoja = norm(hoja).match(/\b20\d{2}\b/g) || [];
+    let ctx = aniosHoja.length === 1 ? +aniosHoja[0] : null; const ctxHoja = ctx !== null;
+    for (const r of rows || []) {
+      const lab = norm(r[0]);
+      const cols = r.slice(1, 13);
+      const ms = cols.map(celdaMes);
+      if (ms.filter(Boolean).length >= 3) {
+        months = ms; hdr = lab; if (pend) sec = pend; pend = ''; tbl = null; continue;
+      }
+      const nums = cols.map(num);
+      const hayNum = nums.some((v, i) => v !== null && !(esAnio(cols[i]) && nums.filter(x => x !== null).length === 1));
+      if (!lab && !hayNum) { tbl = null; continue; }
+      if (!hayNum) {
+        if (esAnio(lab) && !ctxHoja) ctx = num(lab);
+        if (/^\d{1,2}\/\d{1,2}\/\d{2}/.test(lab) || esAnio(lab) || /^total$/i.test(lab)) { tbl = null; continue; }
+        tbl = null; pend = lab; continue;
+      }
+      if (!lab) { if (tbl) tbl.total = nums; tbl = null; continue; }
+      if (!months) continue;
+      if (!tbl) {
+        const partes = [sec, hdr, pend].map(x => sinAnios(x)).filter(Boolean).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i);
+        const anios = months.filter(Boolean).map(m => m.anio);
+        const anioEnc = anios.sort((a, b) => anios.filter(x => x === b).length - anios.filter(x => x === a).length)[0];
+        const anio = ctx || anioEnc;
+        tbl = { titulo: partes.join(' · ') || 'Tabla', partes, anio, filas: [], total: null, sinEncabezado: !sinAnios(hdr) };
+        if (anio !== anioEnc) tbl.nota = 'En la planilla, el encabezado de esta tabla tiene fechas de ' + anioEnc + ' pero está dentro del bloque ' + anio + '; se tomó ' + anio + '.';
+        pend = '';
+        tablas.push(tbl);
+      }
+      const meses = Array(12).fill(null);
+      months.forEach((m, i) => { if (m) meses[m.mes - 1] = nums[i]; });
+      if (/\btotal\b/i.test(lab)) { tbl.total = meses; tbl.totalLabel = lab; continue; }
+      tbl.filas.push({ label: lab, meses });
+    }
+    tablas.forEach(t => {
+      if (t.sinEncabezado && t.filas.filter(f => /^dra?\.?\s/i.test(f.label)).length > t.filas.length / 2) { t.partes.push('por profesional'); t.titulo = t.partes.join(' · '); }
+    });
+    // Descartar valorizaciones (montos con decimales)
+    return tablas.filter(t => t.filas.length && !t.filas.some(f => f.meses.some(v => v !== null && !Number.isInteger(v))));
+  }
+  function parseEspecialidades(book, meta) {
+    const porArch = {};
+    meta.filter(m => m.tipo === 'especialidad').forEach(m => {
+      const rows = book[m.pestana]; if (!rows) return;
+      const a = porArch[m.archivo] = porArch[m.archivo] || { archivo: m.archivo, modificado: m.modificado, esp: nombreEspecialidad(m.archivo), hojas: [] };
+      a.hojas.push({ hoja: m.hoja, rows });
+    });
+    const esp = {};
+    Object.values(porArch).forEach(a => {
+      if (/^val/i.test(a.archivo)) return;
+      const hojasUtiles = a.hojas.filter(h => !/^\s*val/i.test(h.hoja));
+      const nombresHoja = new Set(hojasUtiles.map(h => sinAnios(h.hoja).replace(/comp\.?$/i, '').trim().toLowerCase()).filter(Boolean));
+      const prefijar = nombresHoja.size > 1;
+      hojasUtiles.forEach(h => parseTablasHoja(h.rows, h.hoja).forEach(t => {
+        if (!t.anio) return;
+        if (prefijar) { const p = sinAnios(h.hoja); if (p && !t.partes.some(x => x.toLowerCase() === p.toLowerCase())) { t.partes.unshift(p); t.titulo = t.partes.join(' · '); } }
+        t.archivo = a.archivo; t.hoja = h.hoja; t.modificado = a.modificado;
+        const e = esp[a.esp] = esp[a.esp] || { nombre: a.esp, porAnio: {} };
+        const y = e.porAnio[t.anio] = e.porAnio[t.anio] || {};
+        (y[a.archivo] = y[a.archivo] || []).push(t);
+      }));
+    });
+    // Por especialidad y año, usar el archivo más reciente que tenga ese año
+    return Object.values(esp).map(e => {
+      const anios = {};
+      Object.entries(e.porAnio).forEach(([anio, archs]) => {
+        const elegido = Object.keys(archs).sort((x, y) => (porArch[y].modificado || '').localeCompare(porArch[x].modificado || ''))[0];
+        anios[anio] = { tablas: archs[elegido], archivo: elegido, modificado: porArch[elegido].modificado, alternativos: Object.keys(archs).filter(x => x !== elegido) };
+      });
+      return { nombre: e.nombre, anios };
+    }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  }
   function analizar(book) {
     const listado = parseListado(findSheet(book, 'LISTADO DIARIO') || []);
     const peds = parsePedidos(findSheet(book, 'Pedidos') || []);
     return {
       listado, camas: resumenCamas(listado), pedidos: peds, susp: suspensiones(peds), rep: repetidos(peds), meses: porMes(peds),
       agenda: parseAgenda(findSheet(book, 'AGENDA') || []), guardia: parseGuardia(findSheet(book, 'GUARDIA') || []),
-      camilleros: parseCamilleros(findSheet(book, 'CAMILLEROS') || []), rechazos: parseRechazos(findSheet(book, 'RECHAZOS') || findSheet(book, 'Rechazos') || []), hojas: Object.keys(book),
+      camilleros: parseCamilleros(findSheet(book, 'CAMILLEROS') || []), estadisticas: parseEstadisticas(book), rechazos: parseRechazos(findSheet(book, 'RECHAZOS') || findSheet(book, 'Rechazos') || []), hojas: Object.keys(book),
     };
   }
-  return { parseTextExport, parseCSV, analizar, SECTORES, fmt, dayKey, fechaDMA, fechaMDA };
+  return { parseTextExport, parseCSV, analizar, parseEstadisticas, parseTablasHoja, nombreEspecialidad, SECTORES, fmt, dayKey, fechaDMA, fechaMDA };
 })();
 if (typeof module !== 'undefined') module.exports = L;
 
@@ -596,9 +800,9 @@ function setUserUI() {
   $('#btnRefresh').hidden = !SES; $('#btnOut').hidden = !SES;
   $('#who').textContent = SES ? SES.email : '';
 }
-$('#btnRefresh').onclick = () => fetchData(true);
+$('#btnRefresh').onclick = () => { ESTAD = null; estError = ''; fetchData(true); };
 $('#btnOut').onclick = async () => {
-  const t = SES && SES.token; SES = null; saveSes(); DATA = null; clearTimeout(refreshTimer);
+  const t = SES && SES.token; SES = null; saveSes(); DATA = null; ESTAD = null; clearTimeout(refreshTimer);
   $('#fresh').textContent = 'Sesión cerrada';
   loginView('mail');
   if (t) try { await api({ action: 'logout', token: t }); } catch (e) {}
@@ -616,7 +820,7 @@ $('#fileIn').onchange = async ev => {
 $('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari_priv', PRIV ? '1' : '0'); } catch (e) {} render(); };
 
 /* ---------- Render ---------- */
-const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'rechazos'];
+const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'rechazos', 'estadisticas'];
 function view() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'mapa'; }
 window.addEventListener('hashchange', render);
 function render() {
@@ -624,8 +828,9 @@ function render() {
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + view()));
   if (!DATA) return;
   const v = view();
-  $('#main').innerHTML = ({ mapa: vMapa, movimientos: vMov, espera: vEspera, indicadores: vInd, rechazos: vRech })[v]();
+  $('#main').innerHTML = ({ mapa: vMapa, movimientos: vMov, espera: vEspera, indicadores: vInd, rechazos: vRech, estadisticas: vEst })[v]();
   if (v === 'rechazos') bindRech();
+  if (v === 'estadisticas') bindEst();
   bindTips();
 }
 const cls = s => String(s).replace(/\s+/g, '_');
@@ -834,6 +1039,204 @@ function bindRech() {
   const m = $('#rfMes'); if (m) m.onchange = () => { RF.mes = m.value; RF.cat = 'all'; render(); };
   const c = $('#rfCat'); if (c) c.onchange = () => { RF.cat = c.value; render(); };
   document.querySelectorAll('.vbar').forEach(b => b.onclick = () => { RF.mes = String(RF.mes) === b.dataset.mes ? 'all' : b.dataset.mes; RF.cat = 'all'; render(); });
+}
+
+/* ---------- Estadísticas (Departamento de Estadística) ---------- */
+let EF = { anio: null, modo: 'general', esp: null, espAnio: null, q: '', todas: false, abiertas: {} };
+let ESTAD = null, estCargando = false, estError = '';
+const MESL = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const fmtN = n => n == null ? '—' : Math.round(n).toLocaleString('es-AR');
+const sumN = (a, n) => a.slice(0, n).reduce((s, v) => s + (v || 0), 0);
+function delta(act, prev) {
+  if (!prev) return '<span class="delta eq">sin comparación</span>';
+  const d = (act - prev) / prev * 100;
+  const c = Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn';
+  return `<span class="delta ${c}">${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${Math.abs(d).toFixed(1)}% vs. año anterior</span>`;
+}
+function lineChart(series, opts = {}) {
+  const W = opts.W || 860, H = opts.H || 240, L = 46, R = 12, T = 12, B = 26;
+  const all = series.flatMap(s => s.vals.filter(v => v != null));
+  const mx = Math.max(1, ...all) * 1.08, mn = 0;
+  const x = i => L + i * (W - L - R) / 11, y = v => T + (H - T - B) * (1 - (v - mn) / (mx - mn));
+  const ticks = [0, .25, .5, .75, 1].map(f => mn + (mx - mn) * f);
+  let g = ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#eef0ec"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${fmtN(v)}</text>`).join('');
+  g += MESL.map((m, i) => `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${m}</text>`).join('');
+  g += series.map(s => {
+    const pts = s.vals.map((v, i) => v == null ? null : [x(i), y(v)]);
+    let d = '', open = false; pts.forEach(p => { if (!p) { open = false; return; } d += (open ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); open = true; });
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.w || 2.2}" ${s.dash ? 'stroke-dasharray="5 4"' : ''}/>` +
+      pts.map((p, i) => p ? `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${s.color}"><title>${esc(s.name)} · ${MESL[i]}: ${fmtN(s.vals[i])}</title></circle>` : '').join('');
+  }).join('');
+  return `<svg class="lchart" viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
+}
+function tablaComp(items, prevItems, n, titulo, max = 25) {
+  const pm = {}; (prevItems || []).forEach(x => { pm[x.label] = (pm[x.label] || 0) + sumN(x.meses, n); });
+  const agg = {}; items.forEach(x => { agg[x.label] = (agg[x.label] || 0) + sumN(x.meses, n); });
+  const rows = Object.entries(agg).filter(e => e[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, max);
+  const mx = Math.max(1, ...rows.map(r => r[1])); const tot = Object.values(agg).reduce((a, b) => a + b, 0);
+  return `<table><tr><th>${titulo}</th><th></th><th class="num">Cantidad</th><th class="num">%</th><th class="num">Var. interanual</th></tr>${rows.map(([k, v]) => {
+    const p = pm[k]; const d = p ? (v - p) / p * 100 : null;
+    return `<tr><td>${esc(k)}</td><td style="width:30%"><div class="hbar"><i style="width:${v / mx * 100}%;background:#0f5e6e"></i></div></td><td class="num">${fmtN(v)}</td><td class="num">${(v / tot * 100).toFixed(1)}</td>
+      <td class="num">${d == null ? '<span class="delta eq">—</span>' : `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`}</td></tr>`; }).join('')}</table>`;
+}
+function estDatos() { return ESTAD || (DATA && DATA.estadisticas) || null; }
+async function cargarEst() {
+  if (estCargando || !API || !SES) return;
+  estCargando = true; estError = '';
+  try {
+    const r = await api({ action: 'estadisticas', token: SES.token });
+    if (!r.ok) {
+      if (r.error === 'sesion_vencida') { SES = null; saveSes(); DATA = null; return loginView('mail', '', ERR.sesion_vencida); }
+      estError = r.error === 'estadisticas_no_configuradas' ? 'El servidor todavía no tiene la copia de las planillas de Estadística (falta ejecutar la instalación).' : (ERR[r.error] || r.error);
+    } else ESTAD = L.parseEstadisticas(r.hojas) || { anios: [], giro: [], meta: [], especialidades: [] };
+  } catch (e) { estError = e.message; }
+  finally { estCargando = false; if (view() === 'estadisticas') render(); }
+}
+function vEst() {
+  const E = estDatos();
+  if (!E) {
+    if (API && SES && !estError) { setTimeout(cargarEst, 0); return `<div class="state"><h2>Cargando estadísticas…</h2><p>Leyendo las planillas del Departamento de Estadística.</p></div>`; }
+    return `<div class="state"><h2>Sin datos de estadística</h2><p>${esc(estError || 'No llegaron las planillas del Departamento de Estadística.')}</p>${API && SES ? '<div><button class="btn pri" id="estRetry">Reintentar</button></div>' : ''}</div>`;
+  }
+  const gen = E.anios && E.anios.length, esp = E.especialidades && E.especialidades.length;
+  if (!gen) EF.modo = 'especialidad';
+  const metaG = (E.meta || []).filter(m => m.tipo === 'general').filter((m, i, a) => a.findIndex(x => x.archivo === m.archivo) === i);
+  const nEspArch = new Set((E.meta || []).filter(m => m.tipo === 'especialidad').map(m => m.archivo)).size;
+  const sinc = (E.meta || []).map(m => m.actualizado).filter(Boolean).sort().pop();
+  return `<div class="credit"><div class="av" id="corinaAv">CP</div>
+      <div><h2>Departamento de Estadística · Instituto Lanari</h2><p>Información recopilada por <b>Corina Páez</b>, a partir de los registros mensuales de cada servicio.</p></div>
+      <div class="meta">${metaG.map(m => `${m.anio}: ${esc(m.archivo)}`).join('<br>')}${nEspArch ? `<br>${nEspArch} planillas por especialidad` : ''}${sinc ? '<br>Sincronizado: ' + esc(sinc) : ''}</div></div>
+    <div class="segs" id="estModo">${gen ? `<button data-m="general" class="${EF.modo === 'general' ? 'on' : ''}">Resumen general</button>` : ''}${esp ? `<button data-m="especialidad" class="${EF.modo === 'especialidad' ? 'on' : ''}">Por especialidad</button>` : ''}</div>
+    ${EF.modo === 'general' && gen ? vEstGeneral(E) : esp ? vEstEsp(E) : '<p class="note">No hay planillas por especialidad.</p>'}`;
+}
+/* ---- Por especialidad ---- */
+const ultMes = t => { let n = 0; t.filas.forEach(f => f.meses.forEach((v, i) => { if (v) n = Math.max(n, i + 1); })); return n || 12; };
+const sumaFilas = (t, n) => t.filas.reduce((s, f) => s + sumN(f.meses, n), 0);
+const serieTabla = (t, n) => Array.from({ length: 12 }, (_, i) => i < n ? t.filas.reduce((s, f) => s + (f.meses[i] || 0), 0) : null);
+function claveTablas(tablas) { const c = {}; return tablas.map(t => { const k = t.titulo.toLowerCase(); c[k] = (c[k] || 0) + 1; return k + '#' + c[k]; }); }
+const normQ = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+function vEstEsp(E) {
+  const L_ = E.especialidades;
+  if (!EF.esp || !L_.find(e => e.nombre === EF.esp)) EF.esp = L_[0].nombre;
+  return `<div class="esp-chips" id="espChips">${L_.map(e => `<button data-e="${esc(e.nombre)}" class="${e.nombre === EF.esp ? 'on' : ''}">${esc(e.nombre)}<small>${Object.keys(e.anios).join(' · ')}</small></button>`).join('')}</div>
+    <div class="rfil"><b>Buscar:</b><input id="espQ" type="search" placeholder="médico, práctica, estudio…" value="${esc(EF.q)}" style="min-width:240px">
+      <label style="font-size:13px"><input type="checkbox" id="espTodas" ${EF.todas ? 'checked' : ''}> en todas las especialidades</label></div>
+    <div id="espBody">${vEspBody(E)}</div>`;
+}
+function vEspBody(E) {
+  const q = normQ(EF.q).trim();
+  if (q && EF.todas) return vEspBuscarTodas(E, q);
+  const e = E.especialidades.find(x => x.nombre === EF.esp);
+  const anios = Object.keys(e.anios).map(Number).sort();
+  if (!EF.espAnio || !anios.includes(EF.espAnio)) EF.espAnio = anios[anios.length - 1];
+  const Y = e.anios[EF.espAnio], P = e.anios[EF.espAnio - 1];
+  const kY = claveTablas(Y.tablas), kP = P ? claveTablas(P.tablas) : [];
+  let tablas = Y.tablas.map((t, i) => ({ t, k: kY[i], p: P ? P.tablas[kP.indexOf(kY[i])] : null }));
+  if (q) tablas = tablas.map(o => ({ ...o, filas: o.t.filas.filter(f => normQ(f.label).includes(q) || normQ(o.t.titulo).includes(q)) })).filter(o => o.filas.length);
+  return `<div class="rfil"><b>Año:</b><select id="espAnio">${anios.map(a => `<option ${a === EF.espAnio ? 'selected' : ''}>${a}</option>`).join('')}</select>
+      <span class="note" style="margin:0">Fuente: <b>${esc(Y.archivo)}</b>${Y.modificado ? ' (modificado ' + esc(Y.modificado) + ')' : ''}${Y.alternativos.length ? ` · se usó la planilla más reciente; también existe: ${Y.alternativos.map(esc).join(', ')}` : ''}.</span></div>
+    ${!tablas.length ? '<p class="note">Sin coincidencias en esta especialidad.</p>' : ''}
+    <div class="esp-grid">${tablas.map(o => tarjetaTabla(o.t, o.p, o.k, o.filas)).join('')}</div>`;
+}
+function tarjetaTabla(t, p, k, filasFiltro) {
+  const n = ultMes(t), tot = sumaFilas(t, n), totP = p ? sumaFilas(p, n) : null;
+  const abierta = EF.abiertas[EF.esp + '|' + k] || !!filasFiltro && filasFiltro.length < t.filas.length;
+  const filas = (filasFiltro || t.filas).map(f => ({ f, v: sumN(f.meses, n), pv: p ? (p.filas.find(x => normQ(x.label) === normQ(f.label)) || null) : null })).sort((a, b) => b.v - a.v);
+  const mx = Math.max(1, ...filas.map(x => x.v));
+  const totPlan = t.total ? sumN(t.total, n) : null;
+  const per = n === 12 ? 'año completo' : `ene–${MESL[n - 1].toLowerCase()}`;
+  const pct = d => `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`;
+  return `<div class="card esp-card"><h2>${esc(t.titulo)}</h2>
+    <div class="sub">${EF.espAnio} · ${per}${t.hoja ? ' · hoja «' + esc(t.hoja) + '»' : ''}</div>
+    <div class="esp-kpi"><b>${fmtN(tot)}</b>${p ? delta(tot, totP) : '<span class="delta eq">sin año anterior para comparar</span>'}</div>
+    ${lineChart([...(p ? [{ name: String(EF.espAnio - 1), vals: serieTabla(p, 12), color: '#9aa7a1', dash: true, w: 1.8 }] : []), { name: String(EF.espAnio), vals: serieTabla(t, n), color: '#0f5e6e', w: 2.6 }], { H: 150 })}
+    ${t.nota ? `<p class="warn">${esc(t.nota)}</p>` : ''}
+    ${totPlan !== null && Math.round(totPlan) !== Math.round(tot) ? `<p class="warn">La fila «${esc(t.totalLabel || 'Total')}» de la planilla suma ${fmtN(totPlan)}; la suma de las filas da ${fmtN(tot)}. Se muestra la suma de las filas.</p>` : ''}
+    <table class="esp-t"><tr><th>Detalle</th><th></th><th class="num">${per}</th><th class="num">%</th><th class="num">Var.</th></tr>
+      ${filas.map(({ f, v, pv }) => { const pvv = pv ? sumN(pv.meses, n) : null; return `<tr><td>${esc(f.label)}</td><td style="width:26%"><div class="hbar"><i style="width:${v / mx * 100}%;background:#0f5e6e"></i></div></td><td class="num">${fmtN(v)}</td><td class="num">${tot ? (v / tot * 100).toFixed(1) : '—'}</td><td class="num">${pvv ? pct((v - pvv) / pvv * 100) : '<span class="delta eq">—</span>'}</td></tr>`; }).join('')}</table>
+    <button class="lnk" data-abrir="${esc(k)}">${abierta ? 'Ocultar detalle mensual' : 'Ver detalle mensual'}</button>
+    ${abierta ? `<div class="tw"><table class="esp-m"><tr><th>Detalle</th>${MESL.slice(0, n).map(m => `<th class="num">${m}</th>`).join('')}<th class="num">Total</th></tr>
+      ${filas.map(({ f, v }) => `<tr><td>${esc(f.label)}</td>${f.meses.slice(0, n).map(x => `<td class="num">${x == null ? '' : fmtN(x)}</td>`).join('')}<td class="num"><b>${fmtN(v)}</b></td></tr>`).join('')}
+      <tr class="tot"><td>Suma</td>${serieTabla({ filas: filas.map(x => x.f) }, n).slice(0, n).map(x => `<td class="num">${fmtN(x)}</td>`).join('')}<td class="num">${fmtN(filas.reduce((s, x) => s + x.v, 0))}</td></tr></table></div>` : ''}
+  </div>`;
+}
+function vEspBuscarTodas(E, q) {
+  const res = [];
+  E.especialidades.forEach(e => Object.entries(e.anios).forEach(([a, Y]) => Y.tablas.forEach(t => {
+    const n = ultMes(t);
+    t.filas.forEach(f => { if (normQ(f.label).includes(q) || normQ(t.titulo).includes(q)) res.push({ esp: e.nombre, anio: +a, tabla: t.titulo, label: f.label, v: sumN(f.meses, n), per: n === 12 ? 'año completo' : 'ene–' + MESL[n - 1].toLowerCase() }); });
+  })));
+  res.sort((x, y) => x.esp.localeCompare(y.esp) || y.anio - x.anio || y.v - x.v);
+  return `<p class="note" style="margin-top:0">${res.length} resultado${res.length === 1 ? '' : 's'} para «${esc(EF.q)}» en todas las especialidades.</p>
+    ${res.length ? `<div class="card"><div class="tw"><table><tr><th>Especialidad</th><th>Año</th><th>Tabla</th><th>Detalle</th><th class="num">Cantidad</th><th>Período</th></tr>
+      ${res.slice(0, 300).map(r => `<tr><td><a href="#" class="lnk" data-ir="${esc(r.esp)}|${r.anio}">${esc(r.esp)}</a></td><td>${r.anio}</td><td>${esc(r.tabla)}</td><td>${esc(r.label)}</td><td class="num">${fmtN(r.v)}</td><td>${r.per}</td></tr>`).join('')}</table></div></div>` : ''}`;
+}
+function bindEspBody() {
+  const E = estDatos();
+  const sa = $('#espAnio'); if (sa) sa.onchange = () => { EF.espAnio = +sa.value; redrawEsp(); };
+  document.querySelectorAll('[data-abrir]').forEach(b => b.onclick = () => { const k = EF.esp + '|' + b.dataset.abrir; EF.abiertas[k] = !EF.abiertas[k]; redrawEsp(); });
+  document.querySelectorAll('[data-ir]').forEach(a => a.onclick = ev => { ev.preventDefault(); const [e, y] = a.dataset.ir.split('|'); EF.esp = e; EF.espAnio = +y; EF.todas = false; render(); });
+}
+function redrawEsp() { const b = $('#espBody'); if (!b) return; b.innerHTML = vEspBody(estDatos()); bindEspBody(); bindTips(); }
+function vEstGeneral(E) {
+  const anios = E.anios.map(a => a.anio);
+  if (!EF.anio || !anios.includes(EF.anio)) EF.anio = anios[anios.length - 1];
+  const cur = E.anios.find(a => a.anio === EF.anio), prev = E.anios.find(a => a.anio === EF.anio - 1);
+  const D = cur.datos, P = prev && prev.datos, n = D.mesesConDatos || 12;
+  const per = n === 12 ? `año ${EF.anio} completo` : `enero a ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][n - 1]} ${EF.anio}`;
+  const tot = (d, k) => d ? (d.totales[k] ? sumN(d.totales[k], n) : d[k].reduce((s, x) => s + sumN(x.meses, n), 0)) : null;
+  const fila = (d, re) => d ? d.internados.find(x => re.test(x.label)) : null;
+  const tp = fila(D, /^total pacientes/i), tpP = fila(P, /^total pacientes/i);
+  const ob = fila(D, /^obito/i), obP = fila(P, /^obito/i);
+  const hd = D.hospDia.reduce((s, x) => s + sumN(x.meses, n), 0), hdP = P ? P.hospDia.reduce((s, x) => s + sumN(x.meses, n), 0) : 0;
+  const est = (d, re) => d ? d.estudios.filter(x => re.test(x.label)).reduce((s, x) => s + sumN(x.meses, n), 0) : 0;
+  const imgRe = /^(RAYOS|TOMOGRAF|ECOGRAF|DOPPLER \(SERV)/i, labRe = /^LABORATORIO/i;
+  const giroA = E.giro.filter(g => g.anio === EF.anio && !g.parcial);
+  const giroProm = giroA.length ? giroA.reduce((s, g) => s + g.giro, 0) / giroA.length : null;
+  const colores = { 2024: '#9aa7a1', 2025: '#1f6fb2', 2026: '#c0392b', 2027: '#6b46c1' };
+  const mesesSerie = (d) => (d.totales.consultas || d.consultas.reduce((acc, x) => acc.map((v, i) => v + (x.meses[i] || 0)), Array(12).fill(0))).map((v, i) => i < d.mesesConDatos ? v : null);
+  const intSerie = d => { const t = d.internados.find(x => /^total pacientes/i.test(x.label)); return t ? t.meses.map((v, i) => i < d.mesesConDatos ? v : null) : null; };
+  const meta = E.meta.find(m => m.anio === EF.anio);
+  return `<div class="rfil"><b>Año:</b><select id="efAnio">${anios.map(a => `<option ${a === EF.anio ? 'selected' : ''}>${a}</option>`).join('')}</select>
+      <span class="note" style="margin:0">Período: <b>${per}</b>${P ? ` · comparación con el mismo período de ${EF.anio - 1}` : ''}.</span></div>
+    <div class="kpis">
+      <div class="kpi"><b>${fmtN(tot(D, 'consultas'))}</b><span>Consultas externas</span>${P ? delta(tot(D, 'consultas'), tot(P, 'consultas')) : ''}</div>
+      <div class="kpi"><b>${fmtN(tot(D, 'cirugias'))}</b><span>Cirugías</span>${P ? delta(tot(D, 'cirugias'), tot(P, 'cirugias')) : ''}</div>
+      <div class="kpi"><b>${tp ? fmtN(sumN(tp.meses, n)) : '—'}</b><span>Pacientes internados</span>${tp && tpP ? delta(sumN(tp.meses, n), sumN(tpP.meses, n)) : tp ? '' : '<span class="delta eq">2024 se registró por movimientos</span>'}</div>
+      <div class="kpi"><b>${ob ? fmtN(sumN(ob.meses, n)) : '—'}</b><span>Óbitos${tp && ob ? ' · ' + (sumN(ob.meses, n) / sumN(tp.meses, n) * 100).toFixed(1) + '% de internados' : ''}</span>${ob && obP ? delta(sumN(ob.meses, n), sumN(obP.meses, n)) : ''}</div>
+      <div class="kpi"><b>${hd ? fmtN(hd) : '—'}</b><span>Hospital de día</span>${hd && hdP ? delta(hd, hdP) : ''}</div>
+      <div class="kpi"><b>${fmtN(est(D, imgRe))}</b><span>Imágenes (Rx, TC, eco, doppler)</span>${P ? delta(est(D, imgRe), est(P, imgRe)) : ''}</div>
+      <div class="kpi"><b>${fmtN(est(D, labRe))}</b><span>Determinaciones de laboratorio</span>${P ? delta(est(D, labRe), est(P, labRe)) : ''}</div>
+      ${giroProm ? `<div class="kpi"><b>${giroProm.toFixed(2)}</b><span>Giro cama mensual promedio</span></div>` : ''}
+    </div>
+    <div class="card"><h2>Consultas externas por mes</h2><div class="sub">${E.anios.map(a => `<span class="serie-key"><i style="background:${colores[a.anio] || '#999'}"></i>${a.anio}</span>`).join('')}</div>
+      ${lineChart(E.anios.map(a => ({ name: String(a.anio), vals: mesesSerie(a.datos), color: colores[a.anio] || '#999', w: a.anio === EF.anio ? 3 : 1.8 })))}</div>
+    <div class="grid2">
+      <div class="card"><h2>Consultas por servicio</h2><div class="sub">${esc(per)}${P ? ' · variación contra el mismo período del año anterior' : ''}</div><div class="tw">${tablaComp(D.consultas, P && P.consultas, n, 'Servicio')}</div></div>
+      <div class="card"><h2>Cirugías por especialidad</h2><div class="sub">${esc(per)}</div>${tablaComp(D.cirugias, P && P.cirugias, n, 'Especialidad')}</div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>Internación</h2><div class="sub">${tp ? 'Pacientes internados por mes y óbitos' : 'En 2024 la planilla registra movimientos (ingresos y altas por sector), no pacientes'}</div>
+        ${tp ? lineChart([{ name: 'Internados ' + EF.anio, vals: intSerie(D), color: '#0f5e6e', w: 3 }, ...(P && intSerie(P) ? [{ name: 'Internados ' + (EF.anio - 1), vals: intSerie(P).map(v => v), color: '#9aa7a1', dash: true }] : []), { name: 'Óbitos', vals: ob.meses.map((v, i) => i < n ? v : null), color: '#c0392b' }]) : ''}
+        <table>${D.internados.map(x => `<tr><td>${esc(x.label)}</td><td class="num">${fmtN(sumN(x.meses, n))}</td></tr>`).join('')}</table></div>
+      <div class="card"><h2>Estudios y prácticas</h2><div class="sub">${esc(per)}</div><div class="tw">${tablaComp(D.estudios, P && P.estudios, n, 'Estudio', 30)}</div></div>
+    </div>
+    <div class="grid2">
+      ${D.hospDia.length ? `<div class="card"><h2>Hospital de día</h2><div class="sub">${esc(per)}</div>${tablaComp(D.hospDia, P && P.hospDia, n, 'Servicio')}</div>` : ''}
+      ${E.giro.length ? `<div class="card"><h2>Egresos y giro cama</h2><div class="sub">Según la planilla de Estadística (calculado sobre ${E.giro[0].camas} camas; la matriz Alephoo de internación tiene 58).</div>
+        <table><tr><th>Mes</th><th class="num">Egresos</th><th class="num">Giro cama</th></tr>${E.giro.slice().reverse().map(g => `<tr><td>${esc(g.mes)} ${g.anio}${g.parcial ? ' <span class="tag w">parcial</span>' : ''}</td><td class="num">${fmtN(g.egresos)}</td><td class="num">${g.giro.toFixed(2)}</td></tr>`).join('')}</table></div>` : ''}
+    </div>
+    <p class="note">Fuente: planillas del Departamento de Estadística del Instituto Lanari, recopiladas por Corina Páez y compartidas por Drive. El panel las sincroniza automáticamente; los meses sin cargar no se cuentan. Las comparaciones interanuales usan el mismo período en ambos años.</p>`;
+}
+function bindEst() {
+  const rt = $('#estRetry'); if (rt) rt.onclick = () => { estError = ''; render(); };
+  const s = $('#efAnio'); if (s) s.onchange = () => { EF.anio = +s.value; render(); };
+  document.querySelectorAll('#estModo button').forEach(b => b.onclick = () => { EF.modo = b.dataset.m; render(); });
+  document.querySelectorAll('#espChips button').forEach(b => b.onclick = () => { EF.esp = b.dataset.e; EF.espAnio = null; if (EF.todas) EF.todas = false; render(); });
+  const q = $('#espQ'); if (q) q.oninput = () => { EF.q = q.value; redrawEsp(); };
+  const tt = $('#espTodas'); if (tt) tt.onchange = () => { EF.todas = tt.checked; redrawEsp(); };
+  if ($('#espBody')) bindEspBody();
+  if (window.CORINA_FOTO) { const av = $('#corinaAv'); if (av) av.innerHTML = `<img src="${window.CORINA_FOTO}" alt="Corina Páez">`; }
 }
 /* Tooltip */
 function bindTips() {
