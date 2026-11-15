@@ -501,6 +501,13 @@ const L = (() => {
         origen: !donde ? 'No consignado' : donde === 'Ambulancia externa' ? 'Ambulancia externa' : donde === 'Guardia Lanari' ? 'Guardia Lanari' : /^(hospital|sanatorio|instituto|cl[ií]nica|centro)|\bhtal\b|corporaci[oó]n m[eé]dica/i.test(donde) ? 'Otro hospital / institución' : /domicilio/i.test(donde) ? 'Domicilio' : 'Otro',
         dondeRaw, vigente: !/anulad/i.test(norm(r[I.est])), estado: norm(r[I.est]), obs: norm(r[I.obs]) });
     });
+    // Mismo paciente y misma fecha = el mail o la ficha se envió dos veces: cuenta una sola vez (se conserva el primero)
+    const pacKey = r => r.dni ? 'd' + String(r.dni).replace(/\D/g, '') : 'p' + String(r.paciente || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
+    const vistos = new Set();
+    out.filter(r => r.vigente && (r.dni || r.paciente) && r.fecha).sort((a, b) => a.fecha - b.fecha || (a.hora ?? 99) - (b.hora ?? 99)).forEach(r => {
+      const k = pacKey(r) + '|' + r.fecha.getFullYear() + '-' + r.fecha.getMonth() + '-' + r.fecha.getDate();
+      if (vistos.has(k)) { r.duplicado = true; r.vigente = false; } else vistos.add(k);
+    });
     return out;
   }
 
@@ -1093,7 +1100,7 @@ function vRech() { return areaCard('guardia', '', true) + vRech0(); }
 function vRech0() {
   const R = DATA.rechazos;
   if (!R) return `<div class="state"><h2>Sin datos de rechazos</h2><p>No encontré la pestaña de rechazos (con la columna “Categoría de motivo”) en los datos cargados.</p></div>`;
-  const vig = R.filter(r => r.vigente), anul = R.length - vig.length, aRev = R.filter(r => /revisar/i.test(r.estado)).length;
+  const vig = R.filter(r => r.vigente), dup = R.filter(r => r.duplicado).length, anul = R.length - vig.length - dup, aRev = R.filter(r => /revisar/i.test(r.estado)).length;
   const per = vig.filter(r => RF.mes === 'all' || r.mes === +RF.mes);
   const sel = per.filter(r => RF.cat === 'all' || r.cat === RF.cat);
   const fc = per.filter(r => r.cat === 'Falta de camas');
@@ -1118,7 +1125,7 @@ function vRech0() {
   const perLbl = RF.mes === 'all' ? 'todo 2026' : MESES[RF.mes - 1];
   return `<div class="rfil"><b>Período:</b>
       <select id="rfMes"><option value="all">Todo el año</option>${meses.map(m => `<option value="${m}" ${+RF.mes === m ? 'selected' : ''}>${MESES[m - 1]}</option>`).join('')}</select>
-      <span class="note" style="margin:0">Estadísticas sobre rechazos <b>vigentes</b> (se excluyen ${anul} anulados). Fuente: mails de guardia, cargados automáticamente cada día a las 7:00.${aRev ? ` <span class="tag w">${aRev} a revisar en la planilla</span>` : ''}</span></div>
+      <span class="note" style="margin:0">Estadísticas sobre rechazos <b>vigentes</b> (se excluyen ${anul} anulados${dup ? ` y ${dup} duplicados: mismo paciente y misma fecha, cuentan una vez` : ''}). Fuente: mails de guardia, cargados automáticamente cada día a las 7:00.${aRev ? ` <span class="tag w">${aRev} a revisar en la planilla</span>` : ''}</span></div>
     <div class="kpis">
       <div class="kpi"><b>${per.length}</b><span>Rechazos vigentes · ${esc(perLbl)}</span></div>
       <div class="kpi" style="border-color:#e8b4ad"><b style="color:#c0392b">${per.length ? Math.round(fc.length / per.length * 100) : 0}%</b><span>Por falta de camas (${fc.length})</span></div>
@@ -1143,7 +1150,7 @@ function vRech0() {
       <div class="card"><h2>Diagnósticos más frecuentes</h2><div class="sub">Top 10 · ${esc(perLbl)} · ${dxNC} sin diagnóstico consignado</div>${hbars(dxs.filter(e => e[0] !== 'No consignado').slice(0, 10), per.length, '#0f5e6e')}</div>
       <div class="card"><h2>¿Dónde aguardaba el paciente?</h2><div class="sub">Origen del pedido</div>${hbars(countBy(per, r => r.origen), per.length, '#1f6fb2')}
         <div class="sub" style="margin-top:10px">Lugares más frecuentes</div>${hbars(countBy(per.filter(r => r.donde), r => r.donde).slice(0, 8), 0, '#7aa6d1')}</div>
-      <div class="card"><h2>Pacientes rechazados más de una vez</h2><div class="sub">${reps.length} pacientes · ${esc(perLbl)} · los rechazos del mismo día cuentan como uno</div><div class="tw" style="max-height:330px">
+      <div class="card"><h2>Pacientes rechazados más de una vez</h2><div class="sub">${reps.length} pacientes · ${esc(perLbl)}</div><div class="tw" style="max-height:330px">
         <table><tr><th>Paciente</th><th class="num">Rechazos</th><th>Fechas</th><th>Motivos</th></tr>${reps.map(([k, n]) => { const xs = per.filter(r => (r.dni || r.paciente) === k); const p = pacOf(k);
           return `<tr><td>${nm(p.paciente, p.dni)}</td><td class="num"><b>${n}</b></td><td>${[...new Set(xs.slice().sort((a, b) => (a.fecha || 0) - (b.fecha || 0)).map(r => F(r.fecha).slice(0, 5)))].join(', ')}</td><td>${[...new Set(xs.map(r => r.motivo))].map(esc).join('; ')}</td></tr>`; }).join('') || '<tr><td colspan="4" class="empty">Ninguno.</td></tr>'}</table></div></div>
     </div>
