@@ -608,6 +608,23 @@ const L = (() => {
           if (nombres.length === 1) ponerTitulo(t, nombres[0], 'deducido por la posición de la tabla (en ' + otros.map(o => o[0]).join(' y ') + ' coincide con la planilla general); no confirmado');
         });
       });
+      // Cualquier otra tabla que coincida mes a mes con una fila de consultas de la planilla general: se marca como verificada;
+      // si esa fila es demanda espontánea y el título de la planilla no lo dice, se renombra.
+      Object.entries(e.anios).forEach(([y, Y]) => {
+        const G = lista.find(a => a.anio === +y); if (!G) return;
+        Y.tablas.forEach(t => {
+          if (t.tituloOrigen && /coincide mes a mes/.test(t.tituloOrigen)) { t.coincideGeneral = true; return; }
+          const ser = Array.from({ length: 12 }, (_, i) => t.filas.reduce((s, f) => s + (f.meses[i] || 0), 0));
+          if (!ser.some(v => v)) return;
+          const m = G.datos.consultas.filter(c => c.meses.every((v, i) => (v || 0) === ser[i]));
+          if (m.length !== 1) return;
+          t.coincideGeneral = m[0].label;
+          if (/^dema[nm]?[dt]a esp/i.test(m[0].label) && !/demanda/i.test(t.titulo)) {
+            t.tituloPlanilla = t.titulo; t.partes = ['Demanda espontánea']; t.titulo = 'Demanda espontánea'; t.dudosa = false;
+            t.tituloOrigen = 'en la planilla se llama «' + t.tituloPlanilla + '»; coincide mes a mes con la fila «' + m[0].label + '» de la planilla general';
+          }
+        });
+      });
       // Las que siguen con el mismo título: distinguirlas por el tipo de filas o por orden, y marcarlas para consultar
       Object.values(e.anios).forEach(Y => {
         const grupos = {};
@@ -1459,7 +1476,7 @@ function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
   const pct = d => `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`;
   return `<div class="card esp-card"><h2>${esc(t.titulo)}</h2>
     <div class="sub">${EF.espAnio} · ${per}${t.hoja ? ' · hoja «' + esc(t.hoja) + '»' : ''}</div>
-    ${t.tituloOrigen ? `<div class="sub" style="font-style:italic">Título no escrito en la planilla: ${esc(t.tituloOrigen)}.</div>` : ''}
+    ${t.tituloOrigen ? `<div class="sub" style="font-style:italic">Título asignado: ${esc(t.tituloOrigen)}.</div>` : typeof t.coincideGeneral === 'string' ? `<div class="sub" style="color:#1f7a4d">✓ Coincide mes a mes con «${esc(t.coincideGeneral)}» de la planilla general.</div>` : ''}
     <div class="esp-kpi"><b>${fmtN(tot)}</b>${p ? delta(tot, totP) : '<span class="delta eq">sin año anterior para comparar</span>'}</div>
     ${lineChart([...(p ? [{ name: String(EF.espAnio - 1), vals: serieTabla(p, 12), color: '#9aa7a1', dash: true, w: 1.8 }] : []), { name: String(EF.espAnio), vals: serieTabla(t, n), color: '#0f5e6e', w: 2.6 }], { H: 150 })}
     ${t.nota ? `<p class="warn">${esc(t.nota)}</p>` : ''}
