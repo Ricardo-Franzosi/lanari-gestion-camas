@@ -2,7 +2,7 @@
 
 Panel web de **consulta** del estado de camas e internaciones del Instituto Lanari (IDIM-UBA). Muestra:
 
-- **Mapa de camas:** 1º piso con UBE, 2º piso con Hemodinamia, UTI y Guardia. Compara la ocupación contra la matriz de 58 camas y marca aislamiento y pases.
+- **Mapa de camas:** 1º piso con UBE, 2º piso, UTI y Guardia, con un indicador de camas libres por sector. Compara la ocupación contra la matriz de 58 camas y marca aislamiento y pases. En el 2º piso, D1–D2 (Hemodinamia) y D5–D6 (Trasplante) se muestran como **reservadas** cuando están desocupadas y no cuentan como libres; D3–D4 son Internación general.
 - **Movimientos y agenda:** altas, pases, camas esperando, agenda semanal, próximos ingresos y traslados pendientes.
 - **Espera y suspensiones:** ingresos de los próximos 14 días, OP pendientes, reprogramaciones y suspensiones por falta de cama.
 - **Indicadores:** pedidos por mes, Sala/UTI, cápita/extracápita y calidad del registro.
