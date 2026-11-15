@@ -1477,9 +1477,9 @@ function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
   const per = n === 12 ? 'año completo' : `ene–${MESL[n - 1].toLowerCase()}`;
   const pct = d => Math.abs(d) < 0.5 ? '<span class="delta eq">0%</span>' : `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`;
   return `<div class="card esp-card${t.ambigua ? ' revision' : ''}"><h2>${esc(t.titulo)}</h2>
-    ${t.ambigua ? `<p class="warn" style="background:#fdecea;border-color:#f1b0a8;color:#8a1f12"><b>En revisión:</b> no está claro qué mide esta tabla. Mirarla con reserva hasta que Corina Páez acomode los datos en la planilla.</p>` : ''}
+    ${t.ambigua ? `<p class="warn" style="background:#fdecea;border-color:#f1b0a8;color:#8a1f12"><b>En revisión</b></p>` : ''}
     <div class="sub">${EF.espAnio} · ${per}${t.hoja ? ' · hoja «' + esc(t.hoja) + '»' : ''}</div>
-    ${t.tituloOrigen ? `<div class="sub" style="font-style:italic">Título asignado: ${esc(t.tituloOrigen)}.</div>` : typeof t.coincideGeneral === 'string' ? `<div class="sub" style="color:#1f7a4d">✓ Coincide mes a mes con «${esc(t.coincideGeneral)}» de la planilla general.</div>` : ''}
+    ${t.tituloOrigen && !t.ambigua ? `<div class="sub" style="font-style:italic">Título asignado: ${esc(t.tituloOrigen)}.</div>` : typeof t.coincideGeneral === 'string' ? `<div class="sub" style="color:#1f7a4d">✓ Coincide mes a mes con «${esc(t.coincideGeneral)}» de la planilla general.</div>` : ''}
     <div class="esp-kpi"><b>${fmtN(tot)}</b>${p ? delta(tot, totP) : '<span class="delta eq">sin año anterior para comparar</span>'}</div>
     ${lineChart([...(p ? [{ name: String(EF.espAnio - 1), vals: serieTabla(p, 12), color: '#9aa7a1', dash: true, w: 1.8 }] : []), { name: String(EF.espAnio), vals: serieTabla(t, n), color: '#0f5e6e', w: 2.6 }], { H: 150 })}
     ${t.nota ? `<p class="warn">${esc(t.nota)}</p>` : ''}
