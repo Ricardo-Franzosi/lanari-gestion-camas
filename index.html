@@ -577,8 +577,17 @@ const L = (() => {
     giro.forEach(g => { const k = g.anio + g.mes; if (!vistos.has(k)) { vistos.add(k); giroUnico.push(g); } });
     const especialidades = parseEspecialidades(book, meta);
     // Tablas sin título: si la suma mes a mes coincide exactamente con una fila de consultas de la planilla general del mismo año, se usa ese nombre
-    const sinT = t => /^Tabla sin título/.test(t.partes[0] || '');
-    const ponerTitulo = (t, x, origen) => { const resto = t.partes.slice(1); t.partes = [x, ...resto]; t.titulo = t.partes.join(' · '); t.tituloOrigen = origen; };
+    const dupEn = Y => { const c = {}; Y.tablas.forEach(t => { const k = t.titulo.toLowerCase(); c[k] = (c[k] || 0) + 1; }); return t => c[t.titulo.toLowerCase()] > 1; };
+    especialidades.forEach(e => Object.values(e.anios).forEach(Y => {
+      const d = dupEn(Y), occ = {};
+      Y.tablas.forEach(t => { if (d(t)) t.dudosa = true; const k = t.titulo.toLowerCase(); occ[k] = (occ[k] || 0) + 1; t.clave0 = k + '#' + occ[k]; });
+    }));
+    const sinT = t => /^Tabla sin título/.test(t.partes[0] || '') || t.dudosa;
+    const ponerTitulo = (t, x, origen) => {
+      x = x.replace(/^dema[nm]?[dt]a esp\w*/i, 'Demanda espontánea');
+      if (t.dudosa) { t.tituloPlanilla = t.titulo; t.partes = [x]; t.titulo = x; t.dudosa = false; t.tituloOrigen = 'en la planilla se llama «' + t.tituloPlanilla + '», igual que otra tabla; ' + origen; return; }
+      const resto = t.partes.slice(1); t.partes = [x, ...resto]; t.titulo = t.partes.join(' · '); t.tituloOrigen = origen;
+    };
     especialidades.forEach(e => {
       Object.entries(e.anios).forEach(([y, Y]) => {
         const G = lista.find(a => a.anio === +y);
@@ -594,9 +603,26 @@ const L = (() => {
       Object.entries(e.anios).forEach(([y, Y]) => {
         Y.tablas.forEach((t, i) => {
           if (!sinT(t)) return;
-          const otros = Object.entries(e.anios).filter(([y2, Y2]) => y2 !== y && Y2.tablas.length === Y.tablas.length && Y2.tablas[i] && /^coincide/.test(Y2.tablas[i].tituloOrigen || ''));
-          const nombres = [...new Set(otros.map(([, Y2]) => Y2.tablas[i].partes[0]))];
+          const otros = Object.entries(e.anios).map(([y2, Y2]) => [y2, y2 === y ? null : Y2.tablas.find(x => x.clave0 === t.clave0 && /coincide mes a mes/.test(x.tituloOrigen || ''))]).filter(o => o[1]);
+          const nombres = [...new Set(otros.map(o => o[1].partes[0]))];
           if (nombres.length === 1) ponerTitulo(t, nombres[0], 'deducido por la posición de la tabla (en ' + otros.map(o => o[0]).join(' y ') + ' coincide con la planilla general); no confirmado');
+        });
+      });
+      // Las que siguen con el mismo título: distinguirlas por el tipo de filas o por orden, y marcarlas para consultar
+      Object.values(e.anios).forEach(Y => {
+        const grupos = {};
+        Y.tablas.filter(t => t.dudosa).forEach(t => (grupos[t.titulo.toLowerCase()] = grupos[t.titulo.toLowerCase()] || []).push(t));
+        Object.values(grupos).forEach(g => {
+          if (g.length < 2) { g.forEach(t => { t.dudosa = false; }); return; }
+          const tipo = t => t.filas.filter(f => /^(dra?|lic|prof)\.?\s/i.test(f.label)).length > t.filas.length / 2 ? 'por profesional' : 'por práctica';
+          const tipos = g.map(tipo);
+          g.forEach((t, i) => {
+            const distinto = new Set(tipos).size === g.length;
+            const suf = distinto ? tipos[i] : 'tabla ' + String.fromCharCode(65 + i);
+            t.tituloPlanilla = t.titulo; t.partes.push(suf); t.titulo = t.partes.join(' · ');
+            t.tituloOrigen = 'la planilla usa el mismo título «' + t.tituloPlanilla + '» en ' + g.length + ' tablas' + (distinto ? '; se distinguen por el contenido' : '; falta aclarar a qué corresponde cada una');
+            if (!distinto) t.ambigua = true;
+          });
         });
       });
     });
