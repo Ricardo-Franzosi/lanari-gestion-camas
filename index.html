@@ -576,6 +576,30 @@ const L = (() => {
     const giroUnico = []; const vistos = new Set();
     giro.forEach(g => { const k = g.anio + g.mes; if (!vistos.has(k)) { vistos.add(k); giroUnico.push(g); } });
     const especialidades = parseEspecialidades(book, meta);
+    // Tablas sin título: si la suma mes a mes coincide exactamente con una fila de consultas de la planilla general del mismo año, se usa ese nombre
+    const sinT = t => /^Tabla sin título/.test(t.partes[0] || '');
+    const ponerTitulo = (t, x, origen) => { const resto = t.partes.slice(1); t.partes = [x, ...resto]; t.titulo = t.partes.join(' · '); t.tituloOrigen = origen; };
+    especialidades.forEach(e => {
+      Object.entries(e.anios).forEach(([y, Y]) => {
+        const G = lista.find(a => a.anio === +y);
+        Y.tablas.filter(sinT).forEach(t => {
+          if (!G) return;
+          const ser = Array.from({ length: 12 }, (_, i) => t.filas.reduce((s, f) => s + (f.meses[i] || 0), 0));
+          if (!ser.some(v => v)) return;
+          const m = G.datos.consultas.filter(c => c.meses.every((v, i) => (v || 0) === ser[i]));
+          if (m.length === 1) ponerTitulo(t, m[0].label, 'coincide mes a mes con la fila «' + m[0].label + '» de la planilla general');
+        });
+      });
+      // Por posición: misma especialidad, misma cantidad de tablas, y en otros años esa posición quedó identificada por coincidencia exacta
+      Object.entries(e.anios).forEach(([y, Y]) => {
+        Y.tablas.forEach((t, i) => {
+          if (!sinT(t)) return;
+          const otros = Object.entries(e.anios).filter(([y2, Y2]) => y2 !== y && Y2.tablas.length === Y.tablas.length && Y2.tablas[i] && /^coincide/.test(Y2.tablas[i].tituloOrigen || ''));
+          const nombres = [...new Set(otros.map(([, Y2]) => Y2.tablas[i].partes[0]))];
+          if (nombres.length === 1) ponerTitulo(t, nombres[0], 'deducido por la posición de la tabla (en ' + otros.map(o => o[0]).join(' y ') + ' coincide con la planilla general); no confirmado');
+        });
+      });
+    });
     return lista.length || especialidades.length ? { anios: lista, giro: giroUnico, meta, especialidades } : null;
   }
   // ---------- Planillas por especialidad (genérico) ----------
@@ -679,6 +703,13 @@ const L = (() => {
         const u = t.filas[t.filas.length - 1], resto = t.filas.slice(0, -1);
         const ok = u.meses.every((v, i) => (v || 0) === resto.reduce((s, f) => s + (f.meses[i] || 0), 0)) && u.meses.some(v => v);
         if (ok) { t.filas.pop(); if (!t.total) { t.total = u.meses; t.totalLabel = u.label; } if (!t.partes.length) { t.partes.push(u.label); t.titulo = u.label; t.sinEncabezado = false; } }
+      }
+      if (!t.partes.length && t.totalLabel) { const x = t.totalLabel.replace(/\btotal\b.*$/i, '').replace(/[\s.·-]+$/, '').trim(); if (x.length >= 4) { t.partes.push(x); t.titulo = x; t.sinEncabezado = false; t.tituloOrigen = 'fila de total de la planilla'; } }
+      if (!t.partes.length && t.filas.length >= 2) {
+        const ls = t.filas.map(f => f.label); let p = ls[0];
+        ls.forEach(l => { while (p && !l.startsWith(p)) p = p.slice(0, -1); });
+        p = p.replace(/\s*(dra?\.?)?\s*$/i, '').replace(/[\s.·-]+$/, '').trim();
+        if (p.length >= 8) { t.partes.push(p); t.titulo = p; t.sinEncabezado = false; t.tituloOrigen = 'texto común de las filas'; }
       }
       if (!t.partes.length) { sinTit[t.anio] = (sinTit[t.anio] || 0) + 1; t.partes.push('Tabla sin título en la planilla (' + sinTit[t.anio] + ')'); t.titulo = t.partes[0]; }
     });
@@ -1399,6 +1430,7 @@ function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
   const pct = d => `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`;
   return `<div class="card esp-card"><h2>${esc(t.titulo)}</h2>
     <div class="sub">${EF.espAnio} · ${per}${t.hoja ? ' · hoja «' + esc(t.hoja) + '»' : ''}</div>
+    ${t.tituloOrigen ? `<div class="sub" style="font-style:italic">Título no escrito en la planilla: ${esc(t.tituloOrigen)}.</div>` : ''}
     <div class="esp-kpi"><b>${fmtN(tot)}</b>${p ? delta(tot, totP) : '<span class="delta eq">sin año anterior para comparar</span>'}</div>
     ${lineChart([...(p ? [{ name: String(EF.espAnio - 1), vals: serieTabla(p, 12), color: '#9aa7a1', dash: true, w: 1.8 }] : []), { name: String(EF.espAnio), vals: serieTabla(t, n), color: '#0f5e6e', w: 2.6 }], { H: 150 })}
     ${t.nota ? `<p class="warn">${esc(t.nota)}</p>` : ''}
