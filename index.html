@@ -492,11 +492,14 @@ const L = (() => {
       }
       const hm = norm(r[I.hora] instanceof Date ? r[I.hora].toTimeString() : r[I.hora]).match(/^(\d{1,2}):(\d{2})/);
       // "Guardia Lanari", "Guardia externa Lanari" y "Lanari" son el mismo lugar
-      let donde = norm(r[I.donde]); if (/lanari/i.test(donde) && !/^(hospital|ambulancia)/i.test(donde)) donde = 'Guardia Lanari';
+      const dondeRaw = norm(r[I.donde]); let donde = dondeRaw;
+      if (/lanari/i.test(donde) && !/^(hospital|ambulancia)/i.test(donde)) donde = 'Guardia Lanari';
+      // Cualquier ambulancia (empresa y móvil que sea) es una ambulancia externa
+      if (/^ambulancia/i.test(donde)) donde = 'Ambulancia externa';
       out.push({ n: norm(r[I.n]), fecha: f, mes: mes || (f ? f.getMonth() + 1 : null), hora: hm ? +hm[1] : null, paciente: norm(r[I.pac]), dni: norm(r[I.dni]).replace(/\D/g, ''),
         tipo: norm(r[I.tipo]), cat: norm(r[I.cat]) || 'No especificado', motivo: norm(r[I.mot]), dx: norm(r[I.dx]) || 'No consignado', donde,
-        origen: !donde ? 'No consignado' : /^ambulancia/i.test(donde) ? 'Ambulancia' : donde === 'Guardia Lanari' ? 'Guardia Lanari' : /^(hospital|sanatorio|instituto|cl[ií]nica|centro)|\bhtal\b|corporaci[oó]n m[eé]dica/i.test(donde) ? 'Otro hospital / institución' : /domicilio/i.test(donde) ? 'Domicilio' : 'Otro',
-        vigente: !/anulad/i.test(norm(r[I.est])), estado: norm(r[I.est]), obs: norm(r[I.obs]) });
+        origen: !donde ? 'No consignado' : donde === 'Ambulancia externa' ? 'Ambulancia externa' : donde === 'Guardia Lanari' ? 'Guardia Lanari' : /^(hospital|sanatorio|instituto|cl[ií]nica|centro)|\bhtal\b|corporaci[oó]n m[eé]dica/i.test(donde) ? 'Otro hospital / institución' : /domicilio/i.test(donde) ? 'Domicilio' : 'Otro',
+        dondeRaw, vigente: !/anulad/i.test(norm(r[I.est])), estado: norm(r[I.est]), obs: norm(r[I.obs]) });
     });
     return out;
   }
@@ -1135,7 +1138,7 @@ function vRech0() {
     <div class="card"><h2>Detalle de rechazos</h2><div class="rfil" style="margin:6px 0 8px"><b>Motivo:</b><select id="rfCat"><option value="all">Todos</option>${countBy(per, r => r.cat).map(([c]) => `<option ${RF.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="note" style="margin:0">${sel.length} rechazos</span></div>
       <div class="tw"><table><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Motivo</th><th>Diagnóstico</th><th>Dónde aguardaba</th></tr>
       ${sel.slice().sort((a, b) => (b.fecha || 0) - (a.fecha || 0)).map(r => `<tr><td>${F(r.fecha)}</td><td class="mono">${r.hora != null ? String(r.hora).padStart(2, '0') + 'h' : ''}</td><td>${nm(r.paciente, r.dni)}</td><td>${esc(r.tipo.replace('Rechazo ', '').replace(/^./, c => c.toUpperCase()))}</td>
-        <td><span class="tag" style="background:${catCol(r.cat)}22;color:${catCol(r.cat)}">${esc(r.cat)}</span><br><span style="color:var(--muted);font-size:12px">${esc(r.motivo)}</span></td><td>${esc(r.dx)}</td><td>${esc(r.donde || '—')}</td></tr>`).join('')}</table></div></div>`;
+        <td><span class="tag" style="background:${catCol(r.cat)}22;color:${catCol(r.cat)}">${esc(r.cat)}</span><br><span style="color:var(--muted);font-size:12px">${esc(r.motivo)}</span></td><td>${esc(r.dx)}</td><td>${esc(r.dondeRaw || '—')}</td></tr>`).join('')}</table></div></div>`;
 }
 function bindRech() {
   const m = $('#rfMes'); if (m) m.onchange = () => { RF.mes = m.value; RF.cat = 'all'; render(); };
