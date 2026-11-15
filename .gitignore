@@ -1,0 +1,8 @@
+# Este repositorio es público: NUNCA subir datos de pacientes.
+*.xlsx
+*.xls
+*.csv
+*.txt
+*export*
+*SOLICITUD*
+.DS_Store

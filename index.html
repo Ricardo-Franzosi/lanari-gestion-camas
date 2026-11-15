@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestión de camas · Instituto Lanari</title>
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<meta name="robots" content="noindex, nofollow">
+<style>
+:root{
+  --bg:#f4f5f2; --panel:#fff; --ink:#1d2321; --muted:#68716d; --line:#dfe3dd;
+  --libre:#1f8a5b; --libre-bg:#e3f4ea; --ocup:#3b4a5a; --ocup-bg:#e8ecf0;
+  --alta:#b7791f; --alta-bg:#fdf1dc; --pase:#6b46c1; --pase-bg:#efe9fb;
+  --obito:#222; --obito-bg:#d9d9d9; --esp:#c0392b; --esp-bg:#fbe5e2; --nd:#999; --nd-bg:#f2f2f2;
+  --aisl:#c0392b; --accent:#0f5e6e;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.4}
+header{background:#fff;color:var(--ink)}
+header .top{padding:10px 20px;border-bottom:3px solid #1f6fb2}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;justify-content:space-between}
+h1{font-size:18px;font-weight:600;margin:0;letter-spacing:.2px}
+h1 small{font-weight:400;color:#9fbcb4;font-size:13px;margin-left:6px}
+.brand{display:flex;align-items:center;gap:12px}
+#logo{height:64px;width:auto}
+.brand .sep{width:1px;height:40px;background:var(--line)}
+.inst{font-size:11px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+footer{color:var(--muted);font-size:11.5px;text-align:center;padding:0 20px 24px}
+.src{font-size:12px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:6px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer}
+.btn:hover{background:#f1f3ef}
+.btn.light{border-color:var(--line);color:var(--ink);background:#fff}
+nav{display:flex;gap:2px;overflow-x:auto;background:#14322f;padding:8px 20px 0}
+nav a{color:#b9cfc8;text-decoration:none;padding:9px 14px;border-radius:8px 8px 0 0;font-weight:500;white-space:nowrap}
+nav a.on{background:var(--bg);color:var(--ink)}
+main{padding:18px 20px 40px;max-width:1500px;margin:0 auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.kpi b{display:block;font-size:24px;font-weight:600;font-family:"IBM Plex Mono",monospace}
+.kpi span{color:var(--muted);font-size:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 4px;font-weight:600}
+.card .sub{color:var(--muted);font-size:12px;margin-bottom:10px}
+.sectors{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px}
+.shead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.bar{height:8px;border-radius:4px;background:var(--libre-bg);overflow:hidden;margin:6px 0 10px;display:flex}
+.bar i{display:block;height:100%}
+.grp{margin-top:8px}
+.grp h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 6px;font-weight:600}
+.beds{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px}
+.bed{border-radius:8px;padding:6px 8px;border:1px solid transparent;min-height:58px;position:relative;cursor:default}
+.bed .id{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:13px}
+.bed .pt{font-size:12px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.bed .st{font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;position:absolute;right:7px;top:7px}
+.bed.LIBRE{background:var(--libre-bg);border-color:#bfe4cf}.bed.LIBRE .st{color:var(--libre)}
+.bed.OCUPADA,.bed.PACIENTE_INTERNADO{background:var(--ocup-bg)}.bed.OCUPADA .st{color:var(--ocup)}
+.bed.ALTA,.bed.LIBERE_LA_CAMA{background:var(--alta-bg);border-color:#f2d9a8}.bed.ALTA .st,.bed.LIBERE_LA_CAMA .st{color:var(--alta)}
+.bed.PASE{background:var(--pase-bg);border-color:#d7c9f3}.bed.PASE .st{color:var(--pase)}
+.bed.OBITO{background:var(--obito-bg)}
+.bed.ESPERANDO_CAMA,.bed.ING_CANCELADO{background:var(--esp-bg)}.bed.ESPERANDO_CAMA .st{color:var(--esp)}
+.bed.SIN_DATO{background:var(--nd-bg);color:var(--nd)}
+.bed.aisl{box-shadow:inset 0 0 0 2px var(--aisl)}
+.tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px}
+.tag.a{background:var(--aisl);color:#fff}
+.tag.p{background:var(--pase);color:#fff}
+.tag.w{background:#fdf1dc;color:#8a5a12}
+.tag.g{background:#e3f4ea;color:#17673f}
+.tag.r{background:#fbe5e2;color:#9b2c20}
+.tag.n{background:#eceee9;color:#545b57}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted);margin-bottom:12px}
+.legend .lg-aisl::before{box-shadow:inset 0 0 0 2px var(--aisl)}
+.legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line);padding:6px 8px;position:sticky;top:0;background:#fff}
+td{border-bottom:1px solid #eef0ec;padding:6px 8px;vertical-align:top}
+td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace}
+.tw{max-height:520px;overflow:auto}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:14px}
+.week{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.day{border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfbf9}
+.day h4{margin:0 0 6px;font-size:12px}
+.day h4 small{color:var(--muted);font-weight:400}
+.day .it{font-size:12px;padding:4px 0;border-top:1px dashed var(--line)}
+.day .it.x{text-decoration:line-through;color:var(--muted)}
+.empty{color:var(--muted);font-size:12px;padding:6px 0}
+.state{padding:40px 20px;text-align:center;max-width:640px;margin:30px auto;background:#fff;border:1px solid var(--line);border-radius:12px}
+.state h2{margin:0 0 8px;font-size:17px}
+.state p{color:var(--muted);margin:6px 0 14px}
+.state .btn{color:var(--ink);border-color:var(--line);background:#fff;padding:8px 14px;font-size:13px}
+.state .btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+.warn{background:#fdf6e7;border:1px solid #f2d9a8;color:#7a5410;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px}
+.hbar{display:flex;height:14px;border-radius:3px;overflow:hidden;min-width:120px;background:#f0f1ee}
+.hbar i{display:block;height:100%}
+input[type=file]{display:none}
+.login{text-align:left;max-width:440px}
+.login input{display:block;width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin:6px 0 12px}
+#iCode{font-family:"IBM Plex Mono",monospace;font-size:26px;letter-spacing:8px;text-align:center}
+.lerr{color:#9b2c20;background:#fbe5e2;border-radius:6px;padding:6px 10px;font-size:13px}
+.btn:disabled{opacity:.6;cursor:wait}
+#who{color:var(--ink);font-weight:500}
+label.btn{display:inline-block}
+.mono{font-family:"IBM Plex Mono",monospace}
+.tip{position:fixed;z-index:9;background:#14322f;color:#fff;font-size:12px;padding:8px 10px;border-radius:8px;max-width:280px;pointer-events:none;display:none;box-shadow:0 6px 20px #0003}
+@media (max-width:560px){#logo{height:40px}.brand .sep,.inst{display:none}.sectors,.grid2{grid-template-columns:1fr}main{padding:12px}.beds{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">
+      <img id="logo" src="logo.png" alt="Instituto de Investigaciones Médicas Alfredo Lanari · Universidad de Buenos Aires" onerror="this.remove();document.querySelector('.brand .sep').remove()">
+      <span class="sep"></span>
+      <div>
+        <h1>Gestión de camas e internación</h1>
+        <div class="inst">Auditoría médica y gestión hospitalaria · uso interno</div>
+      </div>
+    </div>
+    <div class="src">
+      <span id="fresh">Sin datos cargados</span>
+      <span id="who"></span>
+      <button class="btn" id="btnRefresh" hidden>Actualizar</button>
+      <button class="btn" id="btnPriv" title="Mostrar iniciales en lugar de nombres">Ocultar nombres</button>
+      <label class="btn" for="fileIn">Cargar export</label>
+      <input type="file" id="fileIn" accept=".xlsx,.xls,.csv,.txt,text/plain">
+      <button class="btn" id="btnOut" hidden>Salir</button>
+    </div>
+  </div>
+  <nav id="nav">
+    <a href="#mapa">Mapa de camas</a>
+    <a href="#movimientos">Movimientos y agenda</a>
+    <a href="#espera">Espera y suspensiones</a>
+    <a href="#indicadores">Indicadores</a>
+  </nav>
+</header>
+<main id="main"><div class="state"><h2>Cargando…</h2></div></main>
+<footer>Instituto de Investigaciones Médicas Alfredo Lanari (IDIM, UBA-CONICET) · Av. Combatientes de Malvinas 3150, CABA · Uso interno: auditoría médica y gestión de camas</footer>
+<div class="tip" id="tip"></div>
+
+<script>
+/* ===== Lógica pura: parseo de la planilla "SOLICITUD DE CAMAS PARA INTERNACION" ===== */
+const L = (() => {
+  const norm = s => (s == null ? '' : String(s)).replace(/\s+/g, ' ').trim();
+  const up = s => norm(s).toUpperCase();
+  const strip = s => up(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  // ---------- CSV / export de texto ----------
+  function parseCSV(text) {
+    const rows = []; let row = [], f = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+        else f += c;
+      } else if (c === '"') q = true;
+      else if (c === ',') { row.push(f); f = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(f); rows.push(row); row = []; f = '';
+      } else f += c;
+    }
+    if (f !== '' || row.length) { row.push(f); rows.push(row); }
+    return rows;
+  }
+  // Formato "## Sheet name: X\n<csv>" (export de texto de Drive)
+  function parseTextExport(text) {
+    const out = {}; const parts = text.split(/^## Sheet name: (.*)$/m);
+    for (let i = 1; i < parts.length; i += 2) out[parts[i].trim()] = parseCSV(parts[i + 1].replace(/^\n/, '').replace(/\n+$/, ''));
+    return out;
+  }
+  function findSheet(book, name) {
+    const k = Object.keys(book).find(k => strip(k) === strip(name)) || Object.keys(book).find(k => strip(k).includes(strip(name)));
+    return k ? book[k] : null;
+  }
+
+  // ---------- Fechas ----------
+  // Celdas de texto D/M/A (fechas de ingreso cargadas a mano).
+  // Si llega un Date (Sheets en configuración EE.UU. interpretó "4/5/2026" como 5-abr), se invierte día/mes.
+  function fechaDMA(v) {
+    if (v instanceof Date && !isNaN(v)) {
+      const d = v.getDate(), m = v.getMonth() + 1, y = v.getFullYear();
+      return d <= 12 ? new Date(y, d - 1, m) : new Date(y, m - 1, d);
+    }
+    const m = norm(v).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+    if (!m) return null;
+    let y = +m[3]; if (y < 100) y += 2000;
+    const dt = new Date(y, +m[2] - 1, +m[1]);
+    return dt.getMonth() === +m[2] - 1 ? dt : null;
+  }
+  // Marca temporal del formulario (M/D/A hh:mm:ss)
+  function fechaMDA(v) {
+    if (v instanceof Date && !isNaN(v)) return v;
+    const m = norm(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m ? new Date(+m[3], +m[1] - 1, +m[2]) : null;
+  }
+  const dayKey = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '';
+  const fmt = d => d ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}` : '—';
+  const mesKey = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : '';
+
+  // ---------- Matriz de camas (Alephoo: 58 = 29 + 21 + 8) ----------
+  const r = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => String(a + i));
+  const SECTORES = [
+    { id: 'p1', nombre: '1º piso clínica', matriz: 29, grupos: [
+      { nombre: 'Habitaciones 94–117', camas: ['94', '95', ...r(100, 117)] },
+      { nombre: 'Camas H–K', camas: ['H', 'I', 'J', 'K'] },
+      { nombre: 'UBE', camas: r(77, 81) } ] },
+    { id: 'p2', nombre: '2º piso clínica', matriz: 21, grupos: [
+      { nombre: 'Habitaciones 19–30', camas: r(19, 30) },
+      { nombre: 'Camas D–F', camas: ['D', 'E', 'F'] },
+      { nombre: 'Hemodinamia', camas: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'] } ] },
+    { id: 'uti', nombre: 'UTI', matriz: 8, grupos: [
+      { nombre: 'Terapia', camas: ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', '31', '32'] } ] },
+    { id: 'g', nombre: 'Guardia', matriz: null, grupos: [
+      { nombre: 'Guardia', camas: ['G1', 'G2', 'G3', 'G4', 'SHOCK R'] } ] },
+  ];
+  const ESTADOS = ['LIBRE', 'OCUPADA', 'ALTA', 'PASE', 'OBITO', 'ESPERANDO CAMA', 'PACIENTE INTERNADO', 'SIN PACIENTES', 'ING CANCELADO', 'LIBERE LA CAMA'];
+
+  function parseListado(rows) {
+    const camas = {}; const programados = []; const extra = [];
+    let i = rows.findIndex(r => up(r[0]) === 'CAMAS');
+    if (i < 0) return { camas, programados, extra, ok: false };
+    let seccion = '';
+    for (i = i + 1; i < rows.length; i++) {
+      const rw = rows[i] || []; const a = up(rw[0]), b = norm(rw[1]), c = up(rw[2]);
+      if (/PROGRAMADOS/.test(up(rw[1]))) {
+        for (let j = i + 1; j < rows.length; j++) {
+          const x = rows[j] || [];
+          if (!x.some(v => norm(v))) break;
+          if (up(x[2]) === 'SIN PACIENTES' && !norm(x[1])) continue;
+          programados.push({ cama: norm(x[0]), paciente: norm(x[1]), estado: up(x[2]), aisl: up(x[3]) });
+        }
+        break;
+      }
+      if (!a) continue;
+      if (/^(GUARDIA|1 PISO|2 PISO|UTI)$/.test(a) && !c) { seccion = a; continue; }
+      if (!c || !ESTADOS.includes(c)) continue;
+      const id = a.replace(/\s+/g, ' ');
+      const cama = { id, seccion, paciente: b, estado: c, aisl: up(rw[3]), pasa: norm(rw[4]) };
+      if (camas[id]) extra.push(cama); else camas[id] = cama;
+    }
+    return { camas, programados, extra, ok: true };
+  }
+
+  function resumenCamas(listado) {
+    const known = new Set(); const sect = SECTORES.map(s => {
+      const g = s.grupos.map(gr => ({ nombre: gr.nombre, camas: gr.camas.map(id => { known.add(id); return listado.camas[id] || { id, estado: 'SIN DATO', paciente: '', aisl: '', pasa: '' }; }) }));
+      const todas = g.flatMap(x => x.camas);
+      const cnt = k => todas.filter(c => c.estado === k).length;
+      const ocup = todas.filter(c => ['OCUPADA', 'ALTA', 'PASE', 'PACIENTE INTERNADO', 'LIBERE LA CAMA'].includes(c.estado)).length;
+      const libres = cnt('LIBRE');
+      const aisl = todas.filter(c => c.aisl && c.aisl !== 'SIN AISLAMIENTO').length;
+      const libreConAisl = todas.filter(c => c.estado === 'LIBRE' && c.aisl && c.aisl !== 'SIN AISLAMIENTO').length;
+      return { ...s, grupos: g, total: todas.length, ocup, libres, aisl, libreConAisl, altas: cnt('ALTA'), pases: cnt('PASE'), sinDato: cnt('SIN DATO') };
+    });
+    const otras = Object.values(listado.camas).filter(c => !known.has(c.id));
+    return { sect, otras };
+  }
+
+  // ---------- Pedidos ----------
+  function col(h, ...keys) { return h.findIndex(x => keys.some(k => strip(x).includes(k))); }
+  const FC_RE = /falta de cama/i;
+  function nth(s) {
+    s = (s || '').toLowerCase();
+    let m = s.match(/(\d)\s*(?:da|ra|era|ta|er|°|º|ma|va)?\s*(?:vez|reprogram|oportun)/); if (m) return +m[1];
+    m = s.match(/(segund|tercer|cuart|quint)\w*\s*(?:vez|reprogram)/); if (m) return { segund: 2, tercer: 3, cuart: 4, quint: 5 }[m[1]];
+    m = s.match(/en (\d) oportunidades/); return m ? +m[1] : null;
+  }
+  function causa(p) {
+    const s = (p.motivo + ' ' + p.obs + ' ' + p.nombre).toLowerCase();
+    if (FC_RE.test(s)) return 'Falta de cama';
+    if (/falta de protesis|falta de prótesis|insumo/.test(s)) return 'Prótesis / insumo';
+    if (/por paciente|anticoagul|pte anulo|desist/.test(s)) return 'Paciente';
+    if (/suspend|cancel|reprogram|cambio fecha|no se realizan|anulad/.test(s)) return 'Sin causa escrita';
+    return '';
+  }
+  function fam(p) {
+    const s = (p.dx + ' ' + p.motivo).toLowerCase();
+    const F = [['QMT', /quimio|qmt/], ['ATP carotídea', /carot/], ['ATP MMII', /mmii|miembros inf|vascular perif/], ['ATC coronaria', /\batc\b|coronari|cardiomiop/], ['TAVI', /tavi/],
+      ['Artroplastia rodilla', /rodilla|gonartr/], ['Artroplastia cadera', /cadera|coxartr/], ['Hernioplastia', /hernio/], ['Colecistectomía', /colecist|colelit/],
+      ['Prostática', /prost|hpb|\brtu/], ['Vejiga', /polipo ves|pólipo ves|vejiga/], ['Hepatectomía', /hepatect/], ['VATS', /vats/], ['Eventroplastia', /eventr/]];
+    for (const [k, re] of F) if (re.test(s)) return k;
+    return norm(p.motivo).slice(0, 30) || '—';
+  }
+  const OP_PEND = /op pendiente|debe op|debe traer op|debe aut|debe traer aut|op pedida|debe presp|sin op|no autorizado/i;
+  const OP_OK = /tiene op|trae op|tiene aut|con autorizacion|con autorización/i;
+
+  function parsePedidos(rows) {
+    if (!rows || !rows.length) return [];
+    const h = rows[0].map(x => norm(x));
+    const ix = {
+      ts: col(h, 'TIMESTAMP', 'MARCA TEMPORAL'), nombre: col(h, 'NOMBRE'), dni: col(h, 'DNI'), os: col(h, 'OBRA SOCIAL'),
+      dx: col(h, 'DIAGNOSTICO'), motivo: col(h, 'MOTIVO'), ing: col(h, 'FECHA DE INGRESO'), proc: col(h, 'FECHA DE PROCEDIMIENTO'),
+      aisl: col(h, 'AISLAMIENTO'), tipo: col(h, 'TIPO DE INTERNACION'), medico: col(h, 'MEDICO SOLICITANTE'), obs: col(h, 'OBSERVACIONES'),
+      hc: col(h, 'HISTORIA CLINICA'), cap: col(h, 'AUT/', 'AUT /', 'PRESP'),
+    };
+    const g = (rw, k) => ix[k] >= 0 ? rw[ix[k]] : '';
+    const out = [];
+    rows.slice(1).forEach((rw, i) => {
+      if (!rw || !rw.some(v => norm(v))) return;
+      const p = {
+        fila: i + 2, ts: fechaMDA(g(rw, 'ts')), nombre: norm(g(rw, 'nombre')), dni: norm(g(rw, 'dni')).replace(/\D/g, ''),
+        osRaw: norm(g(rw, 'os')), dx: norm(g(rw, 'dx')), motivo: norm(g(rw, 'motivo')), ing: fechaDMA(g(rw, 'ing')), proc: fechaDMA(g(rw, 'proc')),
+        aisl: up(g(rw, 'aisl')), tipo: up(g(rw, 'tipo')), medico: norm(g(rw, 'medico')), obs: norm(g(rw, 'obs')), hc: up(g(rw, 'hc')), cap: up(g(rw, 'cap')),
+      };
+      const os = strip(p.osRaw).replace(/[^A-Z]/g, '');
+      p.os = /^PAM|INSSJP|^PAMI/.test(os) || os.startsWith('PAMI') ? 'PAMI' : os.startsWith('DOSUBA') ? 'DOSUBA' : (p.osRaw ? 'Otra' : 'Sin dato');
+      p.capita = /EXTRA/.test(p.cap) ? 'Extracápita' : /CAPITA/.test(p.cap) ? 'Cápita' : 'Sin dato';
+      const t = p.obs + ' ' + p.cap + ' ' + p.motivo;
+      p.op = OP_OK.test(t) ? 'OK' : OP_PEND.test(t) ? 'Pendiente' : '';
+      p.causa = causa(p); p.nth = nth(p.obs + ' ' + p.motivo); p.fam = fam(p);
+      out.push(p);
+    });
+    return out;
+  }
+
+  function suspensiones(peds) {
+    const G = {};
+    peds.forEach(p => { (G[p.dni || p.nombre] = G[p.dni || p.nombre] || []).push(p); });
+    const lista = [];
+    for (const [dni, v] of Object.entries(G)) {
+      const fc = v.filter(p => p.causa === 'Falta de cama');
+      if (!fc.length) continue;
+      const ref = fc[fc.length - 1];
+      const same = v.filter(p => p.fam === ref.fam).sort((a, b) => (a.ing || 0) - (b.ing || 0));
+      const ings = same.map(p => p.ing).filter(Boolean);
+      const ultimo = same[same.length - 1];
+      lista.push({ dni, nombre: ultimo.nombre, fam: ref.fam, medico: ultimo.medico, tipo: ultimo.tipo, pedidos: same.length, fc: fc.length,
+        declarado: Math.max(0, ...v.map(p => p.nth || 0)), primera: ings.length ? new Date(Math.min(...ings)) : null,
+        ultima: ings.length ? new Date(Math.max(...ings)) : null, ultimoMotivo: ultimo.motivo, ultimaCausa: ultimo.causa });
+    }
+    lista.forEach(x => x.dias = x.primera && x.ultima ? Math.round((x.ultima - x.primera) / 864e5) : null);
+    return lista.sort((a, b) => b.declarado - a.declarado || (b.dias || 0) - (a.dias || 0));
+  }
+  function repetidos(peds, min = 3) {
+    const G = {};
+    peds.forEach(p => { const k = (p.dni || p.nombre) + '|' + p.fam; (G[k] = G[k] || []).push(p); });
+    return Object.values(G).filter(v => v.length >= min && v[0].fam !== 'QMT').map(v => {
+      v.sort((a, b) => (a.ing || 0) - (b.ing || 0));
+      return { nombre: v[v.length - 1].nombre, dni: v[0].dni, fam: v[0].fam, n: v.length, primera: v[0].ing, ultima: v[v.length - 1].ing, medico: v[v.length - 1].medico, tipo: v[v.length - 1].tipo };
+    }).sort((a, b) => b.n - a.n);
+  }
+  function porMes(peds) {
+    const M = {};
+    peds.forEach(p => {
+      const k = mesKey(p.ts); if (!k) return;
+      const m = M[k] = M[k] || { mes: k, total: 0, sala: 0, uti: 0, otra: 0, cap: 0, extra: 0, sinCap: 0, pami: 0, opPend: 0, fc: 0, susp: 0 };
+      m.total++; if (p.tipo.includes('UTI')) m.uti++; else if (p.tipo.includes('SALA')) m.sala++; else m.otra++;
+      if (p.capita === 'Cápita') m.cap++; else if (p.capita === 'Extracápita') m.extra++; else m.sinCap++;
+      if (p.os === 'PAMI') m.pami++; if (p.op === 'Pendiente') m.opPend++;
+      if (p.causa === 'Falta de cama') m.fc++; if (p.causa) m.susp++;
+    });
+    return Object.values(M).sort((a, b) => a.mes.localeCompare(b.mes));
+  }
+
+  // ---------- AGENDA / GUARDIA / CAMILLEROS ----------
+  function parseAgenda(rows) {
+    const hi = rows.findIndex(r => (r || []).some(v => strip(v) === 'NOMBRE Y APELLIDO'));
+    if (hi < 0) return [];
+    const dias = [];
+    rows[hi].forEach((v, c) => {
+      if (strip(v) !== 'NOMBRE Y APELLIDO') return;
+      const dia = norm(rows[0] && rows[0][c]); let fecha = rows[1] && rows[1][c];
+      fecha = fecha instanceof Date ? fmt(fecha) : norm(fecha);
+      const items = [];
+      for (let i = hi + 1; i < rows.length; i++) {
+        const x = rows[i] || []; const n = norm(x[c]);
+        if (n) items.push({ nombre: n, motivo: norm(x[c + 1]), tipo: up(x[c + 2]) });
+      }
+      dias.push({ dia, fecha, items });
+    });
+    return dias;
+  }
+  function parseGuardia(rows) {
+    if (!rows || !rows.length) return [];
+    const h = rows[0].slice(0, 11).map(norm);
+    const ix = k => col(h, k);
+    const I = { f: ix('FECHA'), n: ix('NOMBRE'), d: ix('DNI'), os: ix('OBRA SOCIAL'), m: ix('MOTIVO'), t: ix('TIPO DE INTERNACION'), med: ix('MEDICO'), o: ix('OBSERVACIONES'), a: ix('AISLAMIENTO') };
+    return rows.slice(1).filter(r => r && norm(r[I.n])).map(r => {
+      const o = norm(r[I.o]);
+      return { fecha: fechaDMA(r[I.f]), nombre: norm(r[I.n]), dni: norm(r[I.d]), os: norm(r[I.os]), motivo: norm(r[I.m]), tipo: up(r[I.t]), medico: norm(r[I.med]), obs: o, aisl: up(r[I.a]),
+        op: OP_OK.test(o) ? 'OK' : OP_PEND.test(o) ? 'Pendiente' : '' };
+    });
+  }
+  function parseCamilleros(rows) {
+    if (!rows || rows.length < 2) return [];
+    const h = rows[0].map(norm);
+    const I = { ts: col(h, 'TIMESTAMP', 'MARCA'), cama: col(h, 'EN QUE CAMA'), n: col(h, 'NOMBRE Y APELLIDO'), est: col(h, 'DETALLE'), tras: col(h, 'TIPO DE TRASLADO'), pr: col(h, 'PRIORIDAD'), e: col(h, 'ESTADO') };
+    return rows.slice(1).filter(r => r && norm(r[I.n])).map(r => ({ ts: fechaMDA(r[I.ts]), cama: norm(r[I.cama]), nombre: norm(r[I.n]), estudio: norm(r[I.est]), traslado: norm(r[I.tras]), prioridad: up(r[I.pr]), estado: norm(r[I.e]) }));
+  }
+
+  function analizar(book) {
+    const listado = parseListado(findSheet(book, 'LISTADO DIARIO') || []);
+    const peds = parsePedidos(findSheet(book, 'Pedidos') || []);
+    return {
+      listado, camas: resumenCamas(listado), pedidos: peds, susp: suspensiones(peds), rep: repetidos(peds), meses: porMes(peds),
+      agenda: parseAgenda(findSheet(book, 'AGENDA') || []), guardia: parseGuardia(findSheet(book, 'GUARDIA') || []),
+      camilleros: parseCamilleros(findSheet(book, 'CAMILLEROS') || []), hojas: Object.keys(book),
+    };
+  }
+  return { parseTextExport, parseCSV, analizar, SECTORES, fmt, dayKey, fechaDMA, fechaMDA };
+})();
+if (typeof module !== 'undefined') module.exports = L;
+
+</script>
+<script>
+const SHEET_ID = '1L19hyfd_YLGOj_i8JP092XHVeFHASh973aiVOFMozew';
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
+let DATA = null, SRC = '', PRIV = false;
+
+try { PRIV = localStorage.getItem('lanari_priv') === '1'; } catch (e) {}
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const nm = (s, dni) => {
+  if (!s) return '';
+  if (!PRIV) return esc(s);
+  const ini = String(s).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ ,]/g, ' ').split(/[ ,]+/).filter(Boolean).map(w => w[0].toUpperCase()).join('.');
+  return esc(ini + '.' + (dni ? ' ·' + String(dni).slice(-3) : ''));
+};
+const F = L.fmt;
+const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+
+/* ---------- Carga de datos (Apps Script + código por mail) ---------- */
+const API = (window.LANARI_CONFIG && window.LANARI_CONFIG.APPS_SCRIPT_URL) || '';
+const DOM = (window.LANARI_CONFIG && window.LANARI_CONFIG.DOMINIO) || 'lanari.uba.ar';
+const REFRESH_MS = 5 * 60 * 1000;
+let SES = null, refreshTimer = null, loading = false;
+try { SES = JSON.parse(localStorage.getItem('lanari_ses') || 'null'); } catch (e) {}
+if (SES && !(SES.vence > Date.now())) SES = null;
+const saveSes = () => { try { SES ? localStorage.setItem('lanari_ses', JSON.stringify(SES)) : localStorage.removeItem('lanari_ses'); } catch (e) {} };
+
+function bookFromWorkbook(wb) {
+  const book = {};
+  wb.SheetNames.forEach(n => { book[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }); });
+  return book;
+}
+function load(book, src, when) {
+  DATA = L.analizar(book); SRC = src;
+  when = when ? new Date(when) : new Date();
+  $('#fresh').innerHTML = esc(src) + ' · ' + when.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  render();
+}
+async function api(body) {
+  const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), redirect: 'follow' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+const ERR = {
+  mail_no_autorizado: 'Ese mail no está habilitado. Usá tu mail @' + DOM + ' (y pedí que te agreguen si hay lista de acceso).',
+  demasiados_codigos: 'Pediste demasiados códigos. Esperá una hora e intentá de nuevo.',
+  codigo_vencido: 'El código venció o no existe. Pedí uno nuevo.',
+  codigo_incorrecto: 'Código incorrecto.',
+  demasiados_intentos: 'Demasiados intentos. Pedí un código nuevo.',
+  sesion_vencida: 'La sesión venció. Ingresá de nuevo.',
+  error_interno: 'Error del servidor. Probá de nuevo en unos minutos.',
+};
+function showState(title, msg, actions) {
+  $('#main').innerHTML = `<div class="state"><h2>${title}</h2><p>${msg}</p><div>${actions || ''}</div></div>`;
+}
+const upLabel = '<label class="btn" for="fileIn">Cargar export (.xlsx)</label>';
+
+function loginView(step, email, msg) {
+  setUserUI();
+  const err = msg ? `<p class="lerr">${esc(msg)}</p>` : '';
+  $('#main').innerHTML = step === 'code' ? `
+    <form class="state login" id="fCode"><h2>Revisá tu mail</h2>
+      <p>Enviamos un código de 6 dígitos a <b>${esc(email)}</b>. Vence en 10 minutos.</p>
+      <input id="iCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" required>
+      ${err}<div><button class="btn pri" type="submit">Ingresar</button> <button class="btn" type="button" id="bBack">Usar otro mail</button></div>
+      <p class="note">¿No llegó? Revisá la carpeta de spam o <a href="#" id="aResend">pedí otro código</a>.</p></form>` : `
+    <form class="state login" id="fMail"><img src="logo.png" alt="" style="height:72px;margin-bottom:14px" onerror="this.remove()"><h2>Ingresar</h2>
+      <p>Panel de consulta de camas e internaciones. Acceso solo con mail institucional <b>@${esc(DOM)}</b>.</p>
+      <input id="iMail" type="email" autocomplete="email" placeholder="nombre@${esc(DOM)}" value="${esc(email || '')}" required>
+      ${err}<div><button class="btn pri" type="submit">Enviar código</button></div>
+      <p class="note">Los datos se leen de la planilla en el momento de cada consulta y no se guardan en esta página.</p></form>`;
+  if (step === 'code') {
+    $('#iCode').focus();
+    $('#bBack').onclick = () => loginView('mail', email);
+    $('#aResend').onclick = ev => { ev.preventDefault(); requestCode(email); };
+    $('#fCode').onsubmit = async ev => {
+      ev.preventDefault(); const b = ev.submitter || $('#fCode button'); b.disabled = true; b.textContent = 'Verificando…';
+      try {
+        const r = await api({ action: 'verify', email, code: $('#iCode').value.trim() });
+        if (!r.ok) return loginView('code', email, (ERR[r.error] || r.error) + (r.restantes != null ? ` Te quedan ${r.restantes} intentos.` : ''));
+        SES = { token: r.token, email: r.email, vence: r.vence }; saveSes(); fetchData();
+      } catch (e) { loginView('code', email, 'No se pudo conectar con el servidor (' + e.message + ').'); }
+    };
+  } else {
+    $('#iMail').focus();
+    $('#fMail').onsubmit = ev => { ev.preventDefault(); requestCode($('#iMail').value.trim().toLowerCase()); };
+  }
+}
+async function requestCode(email) {
+  if (!new RegExp('^[^@\\s]+@' + DOM.replace(/\./g, '\\.') + '$', 'i').test(email)) return loginView('mail', email, 'El mail tiene que terminar en @' + DOM + '.');
+  const b = $('#main button[type=submit]'); if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
+  try {
+    const r = await api({ action: 'request', email });
+    if (!r.ok) return loginView('mail', email, ERR[r.error] || r.error);
+    loginView('code', email);
+  } catch (e) { loginView('mail', email, 'No se pudo conectar con el servidor (' + e.message + ').'); }
+}
+async function fetchData(manual) {
+  if (!SES || loading) return;
+  loading = true;
+  $('#fresh').textContent = 'Leyendo la planilla…';
+  try {
+    const r = await api({ action: 'data', token: SES.token });
+    if (!r.ok) {
+      if (r.error === 'sesion_vencida') { SES = null; saveSes(); DATA = null; return loginView('mail', '', ERR.sesion_vencida); }
+      throw new Error(ERR[r.error] || r.error);
+    }
+    load(r.hojas, 'Planilla en vivo', r.generado);
+    setUserUI();
+  } catch (e) {
+    if (DATA) $('#fresh').textContent = 'No se pudo actualizar (' + e.message + '). Se muestran los datos anteriores.';
+    else showState('No se pudo leer la planilla', esc(e.message), '<button class="btn pri" id="retry">Reintentar</button> ' + upLabel);
+    const b = $('#retry'); if (b) b.onclick = () => fetchData(true);
+  } finally { loading = false; }
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => { if (!document.hidden) fetchData(); }, REFRESH_MS);
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && SES && DATA && Date.now() - lastLoad() > REFRESH_MS) fetchData();
+});
+let _last = 0; const lastLoad = () => _last; const _load = load; load = (b, s, w) => { _last = Date.now(); _load(b, s, w); };
+function setUserUI() {
+  $('#btnRefresh').hidden = !SES; $('#btnOut').hidden = !SES;
+  $('#who').textContent = SES ? SES.email : '';
+}
+$('#btnRefresh').onclick = () => fetchData(true);
+$('#btnOut').onclick = async () => {
+  const t = SES && SES.token; SES = null; saveSes(); DATA = null; clearTimeout(refreshTimer);
+  $('#fresh').textContent = 'Sesión cerrada';
+  loginView('mail');
+  if (t) try { await api({ action: 'logout', token: t }); } catch (e) {}
+};
+$('#fileIn').onchange = async ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  try {
+    let book;
+    if (/\.xlsx?$/i.test(f.name)) book = bookFromWorkbook(XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true }));
+    else { const t = await f.text(); book = /^## Sheet name:/m.test(t) ? L.parseTextExport(t) : { Pedidos: L.parseCSV(t) }; }
+    load(book, 'Archivo: ' + f.name);
+  } catch (e) { showState('No pude leer el archivo', esc(e.message), upLabel); }
+  ev.target.value = '';
+};
+$('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari_priv', PRIV ? '1' : '0'); } catch (e) {} render(); };
+
+/* ---------- Render ---------- */
+const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores'];
+function view() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'mapa'; }
+window.addEventListener('hashchange', render);
+function render() {
+  $('#btnPriv').textContent = PRIV ? 'Mostrar nombres' : 'Ocultar nombres';
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + view()));
+  if (!DATA) return;
+  const v = view();
+  $('#main').innerHTML = ({ mapa: vMapa, movimientos: vMov, espera: vEspera, indicadores: vInd })[v]();
+  bindTips();
+}
+const cls = s => String(s).replace(/\s+/g, '_');
+const aislTag = a => a && a !== 'SIN AISLAMIENTO' && a !== 'NO' ? `<span class="tag a">${esc(a.toLowerCase())}</span>` : '';
+
+function kpisGlobal() {
+  const S = DATA.camas.sect.filter(s => s.matriz);
+  const tot = S.reduce((a, s) => a + s.total, 0), oc = S.reduce((a, s) => a + s.ocup, 0), li = S.reduce((a, s) => a + s.libres, 0);
+  const all = DATA.camas.sect.flatMap(s => s.grupos.flatMap(g => g.camas));
+  const n = st => all.filter(c => c.estado === st).length;
+  const t0 = today(), t1 = new Date(+t0 + 864e5);
+  const prog = DATA.pedidos.filter(p => p.ing && +p.ing >= +t0 && +p.ing <= +t1 && !/cancel|suspend/i.test(p.motivo + p.nombre)).length;
+  return `<div class="kpis">
+    <div class="kpi"><b>${oc}/${tot}</b><span>Ocupadas (matriz ${S.reduce((a, s) => a + s.matriz, 0)})</span></div>
+    <div class="kpi"><b>${tot ? Math.round(oc / tot * 100) : 0}%</b><span>Ocupación internación</span></div>
+    <div class="kpi"><b>${li}</b><span>Libres en internación</span></div>
+    <div class="kpi"><b>${all.filter(c => c.aisl && c.aisl !== 'SIN AISLAMIENTO' && c.estado !== 'LIBRE').length}</b><span>Pacientes en aislamiento</span></div>
+    <div class="kpi"><b>${n('ALTA') + n('LIBERE LA CAMA')}</b><span>Altas / liberan cama</span></div>
+    <div class="kpi"><b>${n('PASE')}</b><span>Pases pendientes</span></div>
+    <div class="kpi"><b>${n('ESPERANDO CAMA')}</b><span>Esperando cama</span></div>
+    <div class="kpi"><b>${prog}</b><span>Ingresos programados hoy y mañana</span></div>
+  </div>`;
+}
+function vMapa() {
+  const sects = DATA.camas.sect.map(s => {
+    const pc = s.total ? s.ocup / s.total * 100 : 0;
+    const diff = s.matriz && s.total !== s.matriz ? `<span class="tag r">planilla ${s.total} ≠ matriz ${s.matriz}</span>` : '';
+    return `<div class="card"><div class="shead"><h2>${esc(s.nombre)}</h2>
+      <span class="sub"><b>${s.ocup}</b> ocupadas · <b>${s.libres}</b> libres${s.aisl ? ' · ' + s.aisl + ' con aislamiento' : ''}${s.altas ? ' · ' + s.altas + ' alta' : ''}${s.pases ? ' · ' + s.pases + ' pase' : ''} ${diff}</span></div>
+      <div class="bar"><i style="width:${pc}%;background:var(--ocup)"></i></div>
+      ${s.grupos.map(g => `<div class="grp"><h3>${esc(g.nombre)}</h3><div class="beds">${g.camas.map(bed).join('')}</div></div>`).join('')}
+      ${s.libreConAisl ? `<div class="note">${s.libreConAisl} cama(s) libre(s) con aislamiento marcado: verificar si están bloqueadas.</div>` : ''}
+    </div>`;
+  }).join('');
+  const otras = DATA.camas.otras.length ? `<div class="warn">Camas en la planilla que no están en la matriz: ${DATA.camas.otras.map(c => esc(c.id)).join(', ')}</div>` : '';
+  const prog = DATA.listado.programados.length ? `<div class="card"><h2>Programados con cama asignada ocupada</h2><table><tr><th>Cama</th><th>Paciente</th><th>Estado</th></tr>${DATA.listado.programados.map(p => `<tr><td class="mono">${esc(p.cama)}</td><td>${nm(p.paciente)}</td><td>${esc(p.estado)}</td></tr>`).join('')}</table></div>` : '';
+  const listOk = DATA.listado.ok ? '' : '<div class="warn">No encontré la pestaña LISTADO DIARIO con el formato esperado: el mapa puede estar vacío.</div>';
+  return kpisGlobal() + listOk + otras + `<div class="legend">
+      <span style="--c:var(--libre-bg);">Libre</span><span style="--c:var(--ocup-bg)">Ocupada</span><span style="--c:var(--alta-bg)">Alta / libera cama</span>
+      <span style="--c:var(--pase-bg)">Pase</span><span style="--c:var(--esp-bg)">Esperando cama / ing. cancelado</span><span class="lg-aisl" style="--c:#fff">Borde rojo = aislamiento</span></div>
+    <div class="sectors">${sects}</div>${prog}
+    <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (con Hemodinamia D1–D6) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. Hemodinamia se ubicó en el 2º piso porque así cierra la cuenta de 21 camas; está pendiente de confirmar.</p>`;
+}
+function bed(c) {
+  const a = c.aisl && c.aisl !== 'SIN AISLAMIENTO';
+  const info = [c.id, c.paciente && (PRIV ? nm(c.paciente) : c.paciente), c.estado, a ? 'Aislamiento: ' + c.aisl : '', c.pasa ? 'Pasa a cama: ' + c.pasa : ''].filter(Boolean).join('\n');
+  return `<div class="bed ${cls(c.estado)} ${a ? 'aisl' : ''}" data-tip="${esc(info)}"><div class="id">${esc(c.id)}</div>
+    <span class="st">${c.estado === 'OCUPADA' ? '' : esc(c.estado === 'SIN DATO' ? 's/d' : c.estado.toLowerCase())}</span>
+    <div class="pt">${nm(c.paciente)}</div>${a ? aislTag(c.aisl) : ''}${c.pasa ? ' <span class="tag p">→ ' + esc(c.pasa) + '</span>' : ''}</div>`;
+}
+function vMov() {
+  const all = DATA.camas.sect.flatMap(s => s.grupos.flatMap(g => g.camas.map(c => ({ ...c, sector: s.nombre }))));
+  const by = st => all.filter(c => st.includes(c.estado));
+  const tbl = (rows, cols) => rows.length ? `<table><tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}</tr>${rows.map(r => `<tr>${cols.map(c => `<td>${c[1](r)}</td>`).join('')}</tr>`).join('')}</table>` : '<div class="empty">Sin registros.</div>';
+  const camaCols = [['Cama', c => `<span class="mono">${esc(c.id)}</span>`], ['Sector', c => esc(c.sector)], ['Paciente', c => nm(c.paciente)], ['Aislamiento', c => aislTag(c.aisl)]];
+  const t0 = today();
+  const week = DATA.agenda.length ? `<div class="week">${DATA.agenda.map(d => `<div class="day"><h4>${esc(d.dia)} <small>${esc(d.fecha)}</small></h4>${d.items.length ? d.items.map(i => `<div class="it ${/cancel/i.test(i.motivo) ? 'x' : ''}">${nm(i.nombre)}<br><span style="color:var(--muted)">${esc(i.motivo)}</span> ${i.tipo === 'UTI' ? '<span class="tag r">UTI</span>' : i.tipo ? '<span class="tag n">' + esc(i.tipo.replace('SALA GENERAL', 'Sala')) + '</span>' : ''}</div>`).join('') : '<div class="empty">—</div>'}</div>`).join('')}</div>` : '<div class="empty">No encontré la pestaña AGENDA.</div>';
+  const gu = DATA.guardia.filter(g => !g.fecha || +g.fecha >= +t0).sort((a, b) => (a.fecha || 0) - (b.fecha || 0));
+  const cam = DATA.camilleros.filter(c => !/realiz|complet|finaliz/i.test(c.estado));
+  return kpisGlobal() + `<div class="grid2">
+    <div class="card"><h2>Altas y camas a liberar</h2><div class="sub">Estado ALTA o LIBERE LA CAMA en el listado diario</div>${tbl(by(['ALTA', 'LIBERE LA CAMA']), camaCols)}</div>
+    <div class="card"><h2>Pases</h2><div class="sub">Estado PASE, con cama de destino</div>${tbl(by(['PASE']), [...camaCols, ['Pasa a', c => `<span class="tag p">${esc(c.pasa || '—')}</span>`]])}</div>
+    <div class="card"><h2>Esperando cama / ingresos cancelados</h2>${tbl(by(['ESPERANDO CAMA', 'ING CANCELADO']), [...camaCols, ['Estado', c => esc(c.estado)]])}</div>
+    <div class="card"><h2>Óbitos</h2>${tbl(by(['OBITO']), camaCols)}</div>
+  </div>
+  <div class="card"><h2>Agenda de la semana</h2><div class="sub">Pestaña AGENDA. Tachado = cancelado.</div>${week}</div>
+  <div class="card"><h2>Próximos ingresos programados (pestaña GUARDIA)</h2><div class="sub">${gu.length} desde hoy</div><div class="tw">${tbl(gu, [
+    ['Fecha', g => F(g.fecha)], ['Paciente', g => nm(g.nombre, g.dni)], ['Obra social', g => esc(g.os)], ['Motivo', g => esc(g.motivo)], ['Tipo', g => esc(g.tipo)],
+    ['Médico', g => esc(g.medico)], ['OP', g => g.op === 'Pendiente' ? '<span class="tag r">pendiente</span>' : g.op === 'OK' ? '<span class="tag g">tiene OP</span>' : ''], ['Observaciones', g => esc(g.obs)]])}</div></div>
+  <div class="card"><h2>Traslados a estudios pendientes (pestaña CAMILLEROS)</h2>${tbl(cam, [['Fecha', c => F(c.ts)], ['Cama', c => `<span class="mono">${esc(c.cama)}</span>`], ['Paciente', c => nm(c.nombre)], ['Estudio', c => esc(c.estudio)], ['Traslado', c => esc(c.traslado)], ['Prioridad', c => c.prioridad === 'URGENTE' ? '<span class="tag r">urgente</span>' : esc(c.prioridad.toLowerCase())], ['Estado', c => esc(c.estado)]])}</div>`;
+}
+function vEspera() {
+  const t0 = today(), lim = new Date(+t0 + 14 * 864e5);
+  const prev = {}; DATA.pedidos.forEach(p => { const k = (p.dni || p.nombre) + '|' + p.fam; (prev[k] = prev[k] || []).push(p); });
+  const prox = DATA.pedidos.filter(p => p.ing && +p.ing >= +t0 && +p.ing <= +lim && !/cancel|suspend/i.test(p.motivo + ' ' + p.nombre)).sort((a, b) => a.ing - b.ing);
+  const nPrev = p => (prev[(p.dni || p.nombre) + '|' + p.fam] || []).filter(x => x.ing && p.ing && +x.ing < +p.ing).length;
+  const S = DATA.susp; const tot = S.reduce((a, x) => a + x.declarado, 0);
+  return `<div class="kpis">
+    <div class="kpi"><b>${prox.length}</b><span>Ingresos programados próximos 14 días</span></div>
+    <div class="kpi"><b>${prox.filter(p => p.op === 'Pendiente').length}</b><span>…con OP / autorización pendiente</span></div>
+    <div class="kpi"><b>${prox.filter(nPrev).length}</b><span>…que son reprogramaciones</span></div>
+    <div class="kpi"><b>${S.length}</b><span>Pacientes con “falta de cama” escrito</span></div>
+    <div class="kpi"><b>${tot}</b><span>Suspensiones declaradas (suma “Nª vez”)</span></div>
+  </div>
+  <div class="card"><h2>Próximos ingresos (pestaña Pedidos, 14 días)</h2><div class="sub">Excluye pedidos marcados cancelados/suspendidos. “Previos” = pedidos anteriores del mismo paciente para el mismo procedimiento.</div><div class="tw">
+  <table><tr><th>Ingreso</th><th>Paciente</th><th>Procedimiento</th><th>Tipo</th><th>Médico</th><th>OS</th><th>Cápita</th><th>OP</th><th class="num">Previos</th><th>Observaciones</th></tr>
+  ${prox.map(p => { const n = nPrev(p); return `<tr><td>${F(p.ing)}</td><td>${nm(p.nombre, p.dni)}</td><td>${esc(p.motivo)}</td><td>${p.tipo.includes('UTI') ? '<span class="tag r">UTI</span>' : esc(p.tipo.replace('SALA GENERAL', 'Sala'))}${aislTag(p.aisl === 'SI' ? 'aislamiento' : '')}</td><td>${esc(p.medico)}</td><td>${esc(p.os)}</td><td>${esc(p.capita === 'Sin dato' ? '' : p.capita)}</td>
+    <td>${p.op === 'Pendiente' ? '<span class="tag r">pendiente</span>' : p.op === 'OK' ? '<span class="tag g">OK</span>' : ''}</td><td class="num">${n ? `<span class="tag w">${n}</span>` : ''}</td><td>${esc(p.obs === '-' ? '' : p.obs)}</td></tr>`; }).join('') || '<tr><td colspan="10" class="empty">Sin ingresos programados.</td></tr>'}</table></div></div>
+  <div class="card"><h2>Suspensiones por falta de cama</h2><div class="sub">Pacientes con “falta de cama” escrito en Observaciones. “Declaradas” = el número que escribe el servicio (“5ta vez”); puede superar los pedidos cargados.</div><div class="tw">
+  <table><tr><th>Paciente</th><th>Procedimiento</th><th>Médico</th><th>Tipo</th><th class="num">Declaradas</th><th class="num">Pedidos</th><th>1ª fecha</th><th>Última fecha</th><th class="num">Días</th><th>Último estado</th></tr>
+  ${S.map(x => `<tr><td>${nm(x.nombre, x.dni)}</td><td>${esc(x.fam)}</td><td>${esc(x.medico)}</td><td>${esc(x.tipo.replace('SALA GENERAL', 'Sala'))}</td><td class="num"><b>${x.declarado || ''}</b></td><td class="num">${x.pedidos}</td><td>${F(x.primera)}</td><td>${F(x.ultima)}</td><td class="num">${x.dias ?? ''}</td>
+    <td>${/cancel|suspend/i.test(x.ultimoMotivo) ? '<span class="tag r">' + esc(x.ultimoMotivo.toLowerCase()) + '</span>' : (x.ultima && +x.ultima >= +t0 ? '<span class="tag w">programado</span>' : '<span class="tag n">sin confirmar</span>')}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">Sin registros.</td></tr>'}</table></div>
+  <p class="note">“Sin confirmar”: la última fecha ya pasó y la planilla no dice si se internó. Hay que cruzarlo con Alephoo o la facturación.</p></div>
+  <div class="card"><h2>Pedidos repetidos (3 o más, mismo paciente y procedimiento)</h2><div class="sub">Sin causa escrita en la mayoría. En Hemodinamia puede tratarse de procedimientos en etapas. No incluye ciclos de QMT.</div><div class="tw">
+  <table><tr><th>Paciente</th><th>Procedimiento</th><th>Médico</th><th>Tipo</th><th class="num">Pedidos</th><th>Primera</th><th>Última</th></tr>
+  ${DATA.rep.map(x => `<tr><td>${nm(x.nombre, x.dni)}</td><td>${esc(x.fam)}</td><td>${esc(x.medico)}</td><td>${esc(x.tipo.replace('SALA GENERAL', 'Sala'))}</td><td class="num">${x.n}</td><td>${F(x.primera)}</td><td>${F(x.ultima)}</td></tr>`).join('')}</table></div></div>`;
+}
+function vInd() {
+  const M = DATA.meses; const P = DATA.pedidos;
+  const mx = Math.max(1, ...M.map(m => m.total));
+  const mesN = k => { const [y, m] = k.split('-'); return ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][+m - 1] + ' ' + y.slice(2); };
+  const sum = k => M.reduce((a, m) => a + m[k], 0);
+  const cnt = (f) => { const o = {}; P.forEach(p => { const k = f(p) || '—'; o[k] = (o[k] || 0) + 1; }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
+  const SERV = /^(dr|dra|doctor|doctora|cirugia|cirugía|general|hemodinamia|urologia|urología|uro|traumatologia|traumato|gastroenterologia|oncologia|hemato|hematologia|neurocirugia|neurocirugía|cardiologia|j|josé|jose|eduardo)$/;
+  const key = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !SERV.test(w)).sort().join(' ');
+  const medG = {}; P.forEach(p => { const k = key(p.medico) || '—'; const g = medG[k] = medG[k] || { n: 0, v: {} }; g.n++; g.v[p.medico] = (g.v[p.medico] || 0) + 1; });
+  const med = Object.values(medG).sort((a, b) => b.n - a.n).slice(0, 12).map(g => [Object.entries(g.v).sort((a, b) => b[1] - a[1])[0][0], g.n, Object.keys(g.v).length]);
+  return `<div class="kpis">
+    <div class="kpi"><b>${P.length}</b><span>Pedidos de internación cargados</span></div>
+    <div class="kpi"><b>${Math.round(sum('pami') / Math.max(1, P.length) * 100)}%</b><span>PAMI / INSSJP</span></div>
+    <div class="kpi"><b>${sum('uti')}</b><span>Pedidos de UTI</span></div>
+    <div class="kpi"><b>${sum('cap')} / ${sum('extra')}</b><span>Cápita / extracápita</span></div>
+    <div class="kpi"><b>${sum('sinCap')}</b><span>Sin cápita informada</span></div>
+    <div class="kpi"><b>${P.filter(p => p.op === 'Pendiente').length}</b><span>Con OP / autorización pendiente</span></div>
+  </div>
+  <div class="card"><h2>Pedidos por mes de carga</h2><div class="sub">Barra: <span class="tag n">Sala</span> <span class="tag r">UTI</span>. Mes según la marca temporal del formulario.</div>
+  <table><tr><th>Mes</th><th>Sala / UTI</th><th class="num">Total</th><th class="num">Sala</th><th class="num">UTI</th><th class="num">Cápita</th><th class="num">Extra</th><th class="num">Sin dato</th><th class="num">OP pend.</th><th class="num">Susp./cancel.</th><th class="num">Falta cama</th></tr>
+  ${M.map(m => `<tr><td>${mesN(m.mes)}</td><td><div class="hbar" style="width:${m.total / mx * 100}%"><i style="width:${m.sala / m.total * 100}%;background:#9aa7a1"></i><i style="width:${m.uti / m.total * 100}%;background:#d9776b"></i></div></td>
+    <td class="num"><b>${m.total}</b></td><td class="num">${m.sala}</td><td class="num">${m.uti}</td><td class="num">${m.cap}</td><td class="num">${m.extra}</td><td class="num">${m.sinCap}</td><td class="num">${m.opPend}</td><td class="num">${m.susp}</td><td class="num">${m.fc || ''}</td></tr>`).join('')}</table>
+  <p class="note">Susp./cancel. y Falta cama se detectan por texto (Motivo u Observaciones); si no se escribió, no cuenta. OP pendiente: textos como “OP PENDIENTE”, “DEBE OP”, “DEBE AUT”.</p></div>
+  <div class="grid2">
+  <div class="card"><h2>Pedidos por médico solicitante</h2><div class="sub">Top 12, nombres normalizados de forma básica</div><table>${med.map(([k, v, nv]) => `<tr><td>${esc(k)}${nv > 1 ? ` <span class="tag n">${nv} formas de escribirlo</span>` : ''}</td><td class="num">${v}</td></tr>`).join('')}</table></div>
+  <div class="card"><h2>Calidad del registro</h2><div class="sub">Problemas que distorsionan los indicadores</div><table>
+    <tr><td>Obra social escrita de forma no estándar</td><td class="num">${P.filter(p => p.osRaw && !/^(PAMI|DOSUBA)$/i.test(p.osRaw.trim())).length}</td></tr>
+    <tr><td>Sin cápita / extracápita informada</td><td class="num">${P.filter(p => p.capita === 'Sin dato').length}</td></tr>
+    <tr><td>Fecha de ingreso ilegible o vacía</td><td class="num">${P.filter(p => !p.ing).length}</td></tr>
+    <tr><td>Fecha de ingreso anterior a la carga del pedido</td><td class="num">${P.filter(p => p.ing && p.ts && +p.ing < +p.ts - 864e5).length}</td></tr>
+    <tr><td>Campo Motivo sobrescrito con “cancelada/suspendida”</td><td class="num">${P.filter(p => /^\W*(cancel|suspend)/i.test(p.motivo)).length}</td></tr>
+    <tr><td>Observaciones vacías o “-”</td><td class="num">${P.filter(p => !p.obs || p.obs === '-').length}</td></tr>
+  </table></div></div>`;
+}
+/* Tooltip */
+function bindTips() {
+  const tip = $('#tip');
+  document.querySelectorAll('[data-tip]').forEach(el => {
+    el.onmouseenter = e => { tip.textContent = el.dataset.tip; tip.style.whiteSpace = 'pre-line'; tip.style.display = 'block'; };
+    el.onmousemove = e => { tip.style.left = Math.min(e.clientX + 12, innerWidth - 290) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; };
+    el.onmouseleave = () => tip.style.display = 'none';
+  });
+}
+render();
+/* Arranque */
+if (!API) showState('Falta configurar el servidor', 'Todavía no se cargó la URL del Apps Script en <code>config.js</code>. Mientras tanto podés abrir un export de la planilla.', upLabel);
+else if (SES) fetchData(); else loginView('mail');
+</script>
+
+</body>
+</html>
