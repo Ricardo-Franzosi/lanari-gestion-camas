@@ -642,15 +642,24 @@ const L = (() => {
           if (cands.length !== 1) return;
           const c = cands[0];
           const exacta = c.iguales === con.length && c.tr === tot;
-          const lab = c.r.label.replace(/\s+/g, ' ').trim(), lindo = /^[A-ZÁÉÍÓÚÑ .()/]+$/.test(lab) ? lab.charAt(0) + lab.slice(1).toLowerCase() : lab;
-          t.tituloPlanilla = t.titulo; const nom = exacta ? lindo : lindo + ' (probable)';
-          t.partes = [nom]; t.titulo = nom; t.dudosa = false; t.ambigua = false;
+          const lab = c.r.label.replace(/\s+/g, ' ').trim(), lindo = (/^[A-ZÁÉÍÓÚÑ .()/]+$/.test(lab) ? lab.charAt(0) + lab.slice(1).toLowerCase() : lab).replace(/^hosp\.? de d[ií]a/i, 'Hospital de Día').replace(/oncologia/i, 'Oncología').replace(/^dema[nm]?[dt]a esp[a-záéíóú]*/i, 'Demanda espontánea');
+          t.tituloPlanilla = t.titulo; const nom = lindo;
+          t.partes = [nom]; t.titulo = nom; t.dudosa = false; t.ambigua = !exacta; // casi coincide: título asignado y «En revisión»
           if (exacta) t.coincideGeneral = true;
           t.hermanaEnRevision = true; // la otra tabla con el mismo título queda sin explicar
           t.tituloOrigen = 'en la planilla se llama «' + t.tituloPlanilla + '»; ' + (exacta ? 'coincide mes a mes con la fila «' + lab + '» de la planilla general'
             : 'casi coincide con la fila «' + lab + '» de la planilla general (' + c.iguales + ' de ' + con.length + ' meses iguales; ' + c.tr + ' contra ' + tot + '); no confirmado');
         });
       });
+      // Misma tabla (mismo título original y posición) en otros años sin identificar: toma el título de la casi coincidencia, también «En revisión»
+      Object.entries(e.anios).forEach(([y, Y]) => Y.tablas.forEach(t => {
+        if (t.tituloOrigen || !t.clave0) return;
+        const ref = Object.entries(e.anios).map(([y2, Y2]) => y2 === y ? null : Y2.tablas.find(x => x.clave0 === t.clave0 && /casi coincide/.test(x.tituloOrigen || ''))).filter(Boolean);
+        const nombres = [...new Set(ref.map(x => x.titulo))];
+        if (nombres.length !== 1 || !/x\s*pac|x\s*m[eé]dico/i.test(t.titulo)) return;
+        t.tituloPlanilla = t.titulo; t.partes = [nombres[0]]; t.titulo = nombres[0]; t.dudosa = false; t.ambigua = true; t.hermanaEnRevision = true;
+        t.tituloOrigen = 'en la planilla se llama «' + t.tituloPlanilla + '»; misma tabla que en otros años; no confirmado';
+      }));
       // Las que siguen con el mismo título: distinguirlas por el tipo de filas o por orden, y marcarlas para consultar
       Object.values(e.anios).forEach(Y => {
         const grupos = {};
