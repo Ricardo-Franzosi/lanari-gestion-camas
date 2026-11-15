@@ -1214,7 +1214,7 @@ function tablaComp(items, prevItems, n, titulo, max = 25) {
 // Qué filas de la planilla general forman cada servicio. c: consultas programadas · de: demanda espontánea · cir: cirugías.
 const SERVICIOS = [
   { n: 'Traumatología', c: /^traumatolog/i, cir: /^traumatolog/i },
-  { n: 'Cirugía', c: /^cirug/i, cir: /^(general|t[oó]rax|pl[aá]stica|vascular|cabeza y cuello|maxilofacial)$/i },
+  { n: 'Cirugía', c: /^cirug/i, cir: /^(general|t[oó]rax|pl[aá]stica|vascular|cabeza y cuello|maxilofacial|intervencionismo)$/i },
   { n: 'Cardiología', c: /^(cardiolog|insuficiencia cardiaca|control de ma.?capaso|electrofisiolog)/i, cir: /^cardiovascular$/i, esp: 'Cardiología', prac: /estudio/i },
   { n: 'Hemodinamia', c: /^consultorio hemodinamia/i, pracGen: /^hemodinamia$/i },
   { n: 'Hematología', c: /^hematolog/i, de: /hematolog/i },
