@@ -578,7 +578,7 @@ const L = (() => {
   }
   const ESPEC = [[/^traumato/, 'Traumatología'], [/^neuroc/, 'Neurocirugía'], [/^neumo/, 'Neumonología'], [/^nefro/, 'Nefrología'], [/^gastro/, 'Gastroenterología'],
     [/^onco/, 'Oncología'], [/^endocrino/, 'Endocrinología'], [/^cardio/, 'Cardiología'], [/^hemato/, 'Hematología y Reumatología'], [/^imagen/, 'Imágenes'],
-    [/^neuro/, 'Neurología'], [/^serv/, 'Servicio Social'], [/paliativ/, 'Cuidados Paliativos'], [/^metabol/, 'Metabolismo'], [/^cirug/, 'Cirugía'], [/^nutric/, 'Nutrición y Diabetes']];
+    [/^neuro/, 'Neurología'], [/^serv/, 'Servicio Social'], [/paliativ/, 'Cuidados Paliativos'], [/^metabol/, 'Metabolismo / Nutrición y Diabetes'], [/^cirug/, 'Cirugía'], [/^nutric/, 'Metabolismo / Nutrición y Diabetes']];
   function nombreEspecialidad(titulo) {
     let t = norm(titulo).replace(/\.xlsx$/i, '').replace(/^(estad[ií]sticas|esta?\.)\s*/i, '').replace(/[\s\d\-–]+$/g, '').trim();
     const k = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -1249,7 +1249,13 @@ function vEspBody(E) {
     ${!tablas.length ? '<p class="note">Sin coincidencias en esta especialidad.</p>' : ''}
     <div class="esp-grid">${tablas.map(o => tarjetaTabla(o.t, o.p, o.k, o.filas, nEsp)).join('')}</div>`;
 }
+// Aclaraciones confirmadas por la Dirección sobre datos puntuales de las planillas
+const NOTAS_EST = [
+  { esp: 'Cardiología', anio: 2026, titulo: /^cirugia cardiovascular$/i, texto: 'Enero 2026: 2 de los 3 procedimientos los realizó el Dr. Yñon, reemplazando al Dr. Milani. Esta planilla los atribuye a Milani; la de Cirugía los asigna a Yñon (atribución correcta).' },
+  { esp: 'Cirugía', anio: 2026, titulo: /^cirugia cardiovascular · por profesional$/i, texto: 'Enero 2026: los 2 procedimientos del Dr. Yñon corresponden a su reemplazo del Dr. Milani.' }
+];
 function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
+  const notaD = NOTAS_EST.find(x => x.esp === EF.esp && x.anio === EF.espAnio && x.titulo.test(t.titulo));
   const n = nEsp || ultMes(t), tot = sumaFilas(t, n), totP = p ? sumaFilas(p, n) : null;
   const abierta = EF.abiertas[EF.esp + '|' + k] || !!filasFiltro && filasFiltro.length < t.filas.length;
   const filas = (filasFiltro || t.filas).map(f => ({ f, v: sumN(f.meses, n), pv: p ? (p.filas.find(x => normQ(x.label) === normQ(f.label)) || null) : null })).sort((a, b) => b.v - a.v);
@@ -1262,6 +1268,7 @@ function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
     <div class="esp-kpi"><b>${fmtN(tot)}</b>${p ? delta(tot, totP) : '<span class="delta eq">sin año anterior para comparar</span>'}</div>
     ${lineChart([...(p ? [{ name: String(EF.espAnio - 1), vals: serieTabla(p, 12), color: '#9aa7a1', dash: true, w: 1.8 }] : []), { name: String(EF.espAnio), vals: serieTabla(t, n), color: '#0f5e6e', w: 2.6 }], { H: 150 })}
     ${t.nota ? `<p class="warn">${esc(t.nota)}</p>` : ''}
+    ${notaD ? `<p class="warn" style="background:#e8f3f5;border-color:#a9d0d8;color:#0f4c58"><b>Aclaración:</b> ${esc(notaD.texto)}</p>` : ''}
     ${totPlan !== null && Math.round(totPlan) !== Math.round(tot) ? `<p class="warn">La fila «${esc(t.totalLabel || 'Total')}» de la planilla suma ${fmtN(totPlan)}; la suma de las filas da ${fmtN(tot)}. Se muestra la suma de las filas.</p>` : ''}
     <table class="esp-t"><tr><th>Detalle</th><th></th><th class="num">${per}</th><th class="num">%</th><th class="num">Var.</th></tr>
       ${filas.map(({ f, v, pv }) => { const pvv = pv ? sumN(pv.meses, n) : null; return `<tr><td>${esc(f.label)}</td><td style="width:26%"><div class="hbar"><i style="width:${v / mx * 100}%;background:#0f5e6e"></i></div></td><td class="num">${fmtN(v)}</td><td class="num">${tot ? (v / tot * 100).toFixed(1) : '—'}</td><td class="num">${pvv ? pct((v - pvv) / pvv * 100) : '<span class="delta eq">—</span>'}</td></tr>`; }).join('')}</table>
