@@ -73,6 +73,7 @@ main{padding:18px 20px 40px;max-width:1500px;margin:0 auto}
 .bed.PASE{background:var(--pase-bg);border-color:#d7c9f3}.bed.PASE .st{color:var(--pase)}
 .bed.OBITO{background:var(--obito-bg)}
 .bed.ESPERANDO_CAMA,.bed.ING_CANCELADO{background:var(--esp-bg)}.bed.ESPERANDO_CAMA .st{color:var(--esp)}
+.bed.RESERVADA{background:#eaf2fb;border:1.5px dashed #6c93c4;color:#2c4d7a}.bed.RESERVADA .st{color:#2c4d7a}
 .bed.SIN_DATO{background:var(--nd-bg);color:var(--nd)}
 .bed.aisl{box-shadow:inset 0 0 0 2px var(--aisl)}
 .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px}
@@ -222,9 +223,9 @@ const L = (() => {
     { id: 'p2', nombre: '2º piso clínica', matriz: 21, grupos: [
       { nombre: 'Habitaciones 19–30', camas: r(19, 30) },
       { nombre: 'Camas D–F', camas: ['D', 'E', 'F'] },
-      { nombre: 'Hemodinamia (D1–D2)', camas: ['D1', 'D2'] },
+      { nombre: 'Hemodinamia (D1–D2) · reservadas', camas: ['D1', 'D2'], reservada: 'Hemodinamia' },
       { nombre: 'Internación general (D3–D4)', camas: ['D3', 'D4'] },
-      { nombre: 'Trasplante (D5–D6)', camas: ['D5', 'D6'] } ] },
+      { nombre: 'Trasplante (D5–D6) · reservadas', camas: ['D5', 'D6'], reservada: 'Trasplante' } ] },
     { id: 'uti', nombre: 'UTI', matriz: 8, grupos: [
       { nombre: 'Terapia', camas: ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', '31', '32'] } ] },
     { id: 'g', nombre: 'Guardia', matriz: null, grupos: [
@@ -260,14 +261,15 @@ const L = (() => {
 
   function resumenCamas(listado) {
     const known = new Set(); const sect = SECTORES.map(s => {
-      const g = s.grupos.map(gr => ({ nombre: gr.nombre, camas: gr.camas.map(id => { known.add(id); return listado.camas[id] || { id, estado: 'SIN DATO', paciente: '', aisl: '', pasa: '' }; }) }));
+      const g = s.grupos.map(gr => ({ nombre: gr.nombre, camas: gr.camas.map(id => { known.add(id); const c = listado.camas[id] || { id, estado: 'SIN DATO', paciente: '', aisl: '', pasa: '' };
+        return gr.reservada && c.estado === 'LIBRE' ? { ...c, estado: 'RESERVADA', reserva: gr.reservada } : c; }) }));
       const todas = g.flatMap(x => x.camas);
       const cnt = k => todas.filter(c => c.estado === k).length;
       const ocup = todas.filter(c => ['OCUPADA', 'ALTA', 'PASE', 'PACIENTE INTERNADO', 'LIBERE LA CAMA'].includes(c.estado)).length;
       const libres = cnt('LIBRE');
       const aisl = todas.filter(c => c.aisl && c.aisl !== 'SIN AISLAMIENTO').length;
       const libreConAisl = todas.filter(c => c.estado === 'LIBRE' && c.aisl && c.aisl !== 'SIN AISLAMIENTO').length;
-      return { ...s, grupos: g, total: todas.length, ocup, libres, aisl, libreConAisl, altas: cnt('ALTA'), pases: cnt('PASE'), sinDato: cnt('SIN DATO') };
+      return { ...s, grupos: g, total: todas.length, ocup, libres, reservadas: cnt('RESERVADA'), aisl, libreConAisl, altas: cnt('ALTA'), pases: cnt('PASE'), sinDato: cnt('SIN DATO') };
     });
     const otras = Object.values(listado.camas).filter(c => !known.has(c.id));
     return { sect, otras };
@@ -586,7 +588,7 @@ function kpisGlobal() {
   const t0 = today(), t1 = new Date(+t0 + 864e5);
   const prog = DATA.pedidos.filter(p => p.ing && +p.ing >= +t0 && +p.ing <= +t1 && !/cancel|suspend/i.test(p.motivo + p.nombre)).length;
   return `<div class="kpis">
-    ${DATA.camas.sect.map(s => `<div class="kpi free ${s.libres ? '' : 'zero'}"><b>${s.libres}${s.matriz ? '<small>/' + s.total + '</small>' : ''}</b><span>Libres · ${esc(s.nombre)}</span></div>`).join('')}
+    ${DATA.camas.sect.map(s => `<div class="kpi free ${s.libres ? '' : 'zero'}"><b>${s.libres}${s.matriz ? '<small>/' + s.total + '</small>' : ''}</b><span>Libres · ${esc(s.nombre)}${s.reservadas ? ` <br>(+${s.reservadas} reservadas)` : ''}</span></div>`).join('')}
     <div class="kpi"><b>${oc}/${tot}</b><span>Ocupadas (matriz ${S.reduce((a, s) => a + s.matriz, 0)})</span></div>
     <div class="kpi"><b>${tot ? Math.round(oc / tot * 100) : 0}%</b><span>Ocupación internación</span></div>
     <div class="kpi"><b>${all.filter(c => c.aisl && c.aisl !== 'SIN AISLAMIENTO' && c.estado !== 'LIBRE').length}</b><span>Pacientes en aislamiento</span></div>
@@ -601,7 +603,7 @@ function vMapa() {
     const pc = s.total ? s.ocup / s.total * 100 : 0;
     const diff = s.matriz && s.total !== s.matriz ? `<span class="tag r">planilla ${s.total} ≠ matriz ${s.matriz}</span>` : '';
     return `<div class="card"><div class="shead"><h2>${esc(s.nombre)}</h2>
-      <span class="sub"><b>${s.ocup}</b> ocupadas · <b>${s.libres}</b> libres${s.aisl ? ' · ' + s.aisl + ' con aislamiento' : ''}${s.altas ? ' · ' + s.altas + ' alta' : ''}${s.pases ? ' · ' + s.pases + ' pase' : ''} ${diff}</span></div>
+      <span class="sub"><b>${s.ocup}</b> ocupadas · <b>${s.libres}</b> libres${s.reservadas ? ' · ' + s.reservadas + ' reservadas' : ''}${s.aisl ? ' · ' + s.aisl + ' con aislamiento' : ''}${s.altas ? ' · ' + s.altas + ' alta' : ''}${s.pases ? ' · ' + s.pases + ' pase' : ''} ${diff}</span></div>
       <div class="bar"><i style="width:${pc}%;background:var(--ocup)"></i></div>
       ${s.grupos.map(g => `<div class="grp"><h3>${esc(g.nombre)}</h3><div class="beds">${g.camas.map(bed).join('')}</div></div>`).join('')}
       ${s.libreConAisl ? `<div class="note">${s.libreConAisl} cama(s) libre(s) con aislamiento marcado: verificar si están bloqueadas.</div>` : ''}
@@ -612,10 +614,10 @@ function vMapa() {
   const listOk = DATA.listado.ok ? '' : '<div class="warn">No encontré la pestaña LISTADO DIARIO con el formato esperado: el mapa puede estar vacío.</div>';
   const freeRows = DATA.camas.sect.map(s => { const f = s.grupos.flatMap(g => g.camas).filter(c => c.estado === 'LIBRE');
     return `<div class="row"><span class="lbl">${esc(s.nombre)} <b>(${f.length})</b></span>${f.length ? f.map(c => `<span class="chip ${c.aisl && c.aisl !== 'SIN AISLAMIENTO' ? 'a' : ''}" title="${c.aisl && c.aisl !== 'SIN AISLAMIENTO' ? 'Libre con aislamiento: ' + esc(c.aisl) : 'Libre'}">${esc(c.id)}</span>`).join('') : '<span class="empty">sin camas libres</span>'}</div>`; }).join('');
-  const freeBar = `<div class="freebar"><h2>Camas libres ahora</h2>${freeRows}<div class="note">Borde amarillo: cama libre con aislamiento marcado (verificar si está bloqueada).</div></div>`;
+  const freeBar = `<div class="freebar"><h2>Camas libres ahora</h2>${freeRows}<div class="note">Borde amarillo: cama libre con aislamiento marcado (verificar si está bloqueada). No incluye D1–D2 (Hemodinamia) ni D5–D6 (Trasplante), que se muestran como reservadas.</div></div>`;
   return kpisGlobal() + freeBar + listOk + otras + `<div class="legend">
       <span style="--c:#1f8a5b;">Libre</span><span style="--c:var(--ocup-bg)">Ocupada</span><span style="--c:var(--alta-bg)">Alta / libera cama</span>
-      <span style="--c:var(--pase-bg)">Pase</span><span style="--c:var(--esp-bg)">Esperando cama / ing. cancelado</span><span class="lg-aisl" style="--c:#fff">Borde rojo = aislamiento</span></div>
+      <span style="--c:var(--pase-bg)">Pase</span><span style="--c:#eaf2fb">Reservada (Hemodinamia / Trasplante)</span><span style="--c:var(--esp-bg)">Esperando cama / ing. cancelado</span><span class="lg-aisl" style="--c:#fff">Borde rojo = aislamiento</span></div>
     <div class="sectors">${sects}</div>${prog}
     <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (incluye D1–D2 Hemodinamia, D3–D4 Internación general y D5–D6 Trasplante, según la pestaña CAMAS) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. </p>`;
 }
@@ -623,8 +625,8 @@ function bed(c) {
   const a = c.aisl && c.aisl !== 'SIN AISLAMIENTO';
   const info = [c.id, c.paciente && (PRIV ? nm(c.paciente) : c.paciente), c.estado, a ? 'Aislamiento: ' + c.aisl : '', c.pasa ? 'Pasa a cama: ' + c.pasa : ''].filter(Boolean).join('\n');
   return `<div class="bed ${cls(c.estado)} ${a ? 'aisl' : ''}" data-tip="${esc(info)}"><div class="id">${esc(c.id)}</div>
-    <span class="st">${c.estado === 'OCUPADA' ? '' : esc(c.estado === 'SIN DATO' ? 's/d' : c.estado.toLowerCase())}</span>
-    <div class="pt">${nm(c.paciente)}</div>${a ? aislTag(c.aisl) : ''}${c.pasa ? ' <span class="tag p">→ ' + esc(c.pasa) + '</span>' : ''}</div>`;
+    <span class="st">${c.estado === 'OCUPADA' ? '' : esc(c.estado === 'SIN DATO' ? 's/d' : c.estado === 'RESERVADA' ? 'reservada' : c.estado.toLowerCase())}</span>
+    <div class="pt">${c.reserva ? 'Reservada ' + esc(c.reserva) : nm(c.paciente)}</div>${a ? aislTag(c.aisl) : ''}${c.pasa ? ' <span class="tag p">→ ' + esc(c.pasa) + '</span>' : ''}</div>`;
 }
 function vMov() {
   const all = DATA.camas.sect.flatMap(s => s.grupos.flatMap(g => g.camas.map(c => ({ ...c, sector: s.nombre }))));
