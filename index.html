@@ -650,6 +650,15 @@ const L = (() => {
       tbl.filas.push({ label: lab, meses });
     }
     const sinTit = {};
+    // Filas repetidas dentro de una tabla (p. ej. Neumonología: turno mañana y turno tarde): distinguirlas
+    tablas.forEach(t => {
+      const vistos = {}; let turno = '';
+      t.filas.forEach(f => {
+        const m = f.label.match(/\((T\.\s*[MT])\)/i); if (m) turno = m[1].replace(/\s+/, ' ').toUpperCase();
+        const k = f.label.toLowerCase(); vistos[k] = (vistos[k] || 0) + 1;
+        if (vistos[k] > 1) f.label += turno && !m ? ' (' + turno + ')' : ' (' + vistos[k] + ')';
+      });
+    });
     tablas.forEach(t => {
       // Última fila = suma exacta de las demás en todos los meses → es un subtotal de la planilla
       if (t.filas.length >= 3) {
