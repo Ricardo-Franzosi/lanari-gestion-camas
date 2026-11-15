@@ -172,6 +172,8 @@ function instalarEstadisticas() {
 
 /** Convierte las planillas de Estadística a texto plano en una hoja propia que el panel lee rápido. */
 function actualizarEstadisticas(forzar) {
+  forzar = forzar === true; // desde un disparador llega un objeto de evento
+  const t0 = Date.now(); let pendientes = 0;
   const props = PropertiesService.getScriptProperties();
   let cache = props.getProperty('EST_CACHE_ID') ? SpreadsheetApp.openById(props.getProperty('EST_CACHE_ID')) : null;
   if (!cache) { cache = SpreadsheetApp.create('Panel camas Lanari - estadísticas (copia automática)'); props.setProperty('EST_CACHE_ID', cache.getId()); }
@@ -195,13 +197,15 @@ function actualizarEstadisticas(forzar) {
   CONFIG.ESTAD_EXTRA.forEach(x => lista.unshift({ id: x.id, titulo: x.titulo, mod: DriveApp.getFileById(x.id).getLastUpdated(), tipo: 'general', gsheet: true, anio: x.anio }));
   const meta = [['Pestaña', 'Tipo', 'Año', 'Archivo', 'Hoja', 'Modificado', 'Sincronizado']];
   const usadas = new Set(['EST_META']);
-  let iEsp = 0;
   lista.forEach(a => {
     const anioGen = a.anio || (a.titulo.match(/(20\d\d)/) || [])[1] || '';
-    const prefijo = a.tipo === 'general' ? 'EST ' + anioGen : 'ESP ' + (++iEsp);
+    // Prefijo estable por archivo (no cambia si se agregan archivos nuevos)
+    if (a.tipo !== 'general' && !vistos[a.id + '#p']) { vistos.__n = (vistos.__n || 0) + 1; vistos[a.id + '#p'] = 'ESP ' + vistos.__n; }
+    const prefijo = a.tipo === 'general' ? 'EST ' + anioGen : vistos[a.id + '#p'];
     const firma = a.id + '|' + a.mod.getTime();
     let hojas = null;
-    const cambiado = forzar || vistos[a.id] !== firma;
+    let cambiado = forzar || vistos[a.id] !== firma;
+    if (cambiado && Date.now() - t0 > 4.5 * 60 * 1000) { cambiado = false; pendientes++; } // límite de 6 min por ejecución
     if (cambiado) {
       let tmpId = null;
       try {
@@ -237,8 +241,20 @@ function actualizarEstadisticas(forzar) {
   m.getRange(1, 1, meta.length, meta[0].length).setNumberFormat('@').setValues(meta);
   const def = cache.getSheetByName('Hoja 1') || cache.getSheetByName('Sheet1'); if (def && cache.getSheets().length > 1) cache.deleteSheet(def);
   props.setProperty('EST_VISTOS', JSON.stringify(vistos));
+  if (pendientes) {
+    ScriptApp.newTrigger('actualizarEstadisticas').timeBased().after(60 * 1000).create();
+    console.log('Quedan ' + pendientes + ' archivos; se continúa en 1 minuto.');
+  }
+  limpiarDisparadoresUnicos_();
   console.log('Archivos: ' + lista.length + ' · pestañas: ' + (meta.length - 1));
   return lista.length;
+}
+
+/** Borra los disparadores de continuación ya usados (los que no son el diario). */
+function limpiarDisparadoresUnicos_() {
+  const ts = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'actualizarEstadisticas');
+  // El diario se crea primero; los de continuación se agregan después. Si hay más de 2, borrar los más viejos de continuación.
+  if (ts.length > 2) ts.slice(1, ts.length - 1).forEach(t => ScriptApp.deleteTrigger(t));
 }
 
 /**
