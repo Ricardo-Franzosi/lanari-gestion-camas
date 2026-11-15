@@ -154,6 +154,7 @@ button.lnk,a.lnk{background:none;border:0;color:#0f5e6e;font:inherit;font-size:1
 .segs a:last-child{border-right:0}.segs a.on{background:#14322f;color:#fff}
 .credit.mini{padding:10px 16px;gap:12px}.credit.mini .av{width:46px;height:46px;font-size:16px}.credit.mini h2{font-size:14.5px}
 .sol-grid{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:14px;align-items:start}
+.capita{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-left:4px solid #0f5e6e}.capita p{margin:4px 0 0;font-size:13.5px;color:var(--muted)}.capita .btn{font-size:14px;padding:9px 16px}
 .qrbox{text-align:center}.qrbox img{width:220px;height:220px;image-rendering:pixelated;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff}
 .pasos{counter-reset:p;list-style:none;padding:0;margin:0}
 .pasos>li{counter-increment:p;position:relative;padding:0 0 14px 44px}
@@ -202,7 +203,7 @@ label.btn{display:inline-block}
   </div>
   <nav id="nav">
     <a href="#mapa">Mapa de camas</a>
-    <a href="#movimientos" id="navGestion" data-grupo="gestion">Gestión de camas ▾</a>
+    <a href="#solicitud" id="navGestion" data-grupo="gestion">Gestión de camas ▾</a>
     <a href="#rechazos">Rechazos guardia</a>
     <a href="#estadisticas">Estadísticas</a>
   </nav>
@@ -853,8 +854,8 @@ $('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari
 
 /* ---------- Render ---------- */
 const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas'];
-const GESTION = [['movimientos', 'Movimientos y agenda'], ['espera', 'Espera y suspensiones'], ['indicadores', 'Indicadores'], ['solicitud', 'Solicitud de internación']];
-let ULT_GESTION = 'movimientos', FOTOS = {};
+const GESTION = [['solicitud', 'Solicitud de internación'], ['movimientos', 'Movimientos y agenda'], ['espera', 'Espera y suspensiones'], ['indicadores', 'Indicadores']];
+let ULT_GESTION = 'solicitud', FOTOS = {};
 /* Responsables de cada área (las fotos llegan del servidor sólo con sesión iniciada) */
 const AREAS = {
   gestion: { foto: 'paula', ini: 'PA', titulo: 'Sector de Gestión de Camas', texto: 'Responsable: <b>Paula Appugliese</b>. Los datos de camas, movimientos, espera y suspensiones provienen de la planilla que suministra su área.' },
@@ -1038,7 +1039,11 @@ function hbars(entries, total, color) {
 const countBy = (arr, f) => { const o = {}; arr.forEach(x => { const k = f(x); if (k != null) o[k] = (o[k] || 0) + 1; }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
 function vSolicitud() {
   const FORM = 'https://johzb3.short.gy/2jMVl1';
-  return `<div class="sol-grid">
+  const CAPITA = 'https://gestionlanari.github.io/consulta-de-capita/';
+  return `<div class="card capita"><div><h2>Consulta de cápita PAMI</h2>
+      <p>Para constatar si el paciente de PAMI está en la cápita del Instituto Lanari.</p></div>
+      <a class="btn pri" href="${CAPITA}" target="_blank" rel="noopener">Consultar cápita PAMI</a></div>
+  <div class="sol-grid">
     <div class="card qrbox"><h2>Formulario de pedido de camas</h2>
       <p style="font-size:13.5px">El formulario digital es el <b>único medio válido</b> para solicitar camas de internación.</p>
       <img src="qr_solicitud.png" alt="Código QR del formulario de pedido de camas">

@@ -4,10 +4,10 @@ Panel web de **consulta** del estado de camas e internaciones del Instituto Lana
 
 - **Mapa de camas:** 1º piso con UBE, 2º piso, UTI y Guardia, con un indicador de camas libres por sector. Compara la ocupación contra la matriz de 58 camas y marca aislamiento y pases. En el 2º piso, D1–D2 (Hemodinamia) y D5–D6 (Trasplante) se muestran como **reservadas** cuando están desocupadas y no cuentan como libres; D3–D4 son Internación general.
 - **Gestión de camas** (menú desplegable; datos del Sector de Gestión de Camas, responsable Paula Appugliese):
+  - **Solicitud de internación** (primera opción): enlace a la consulta de cápita PAMI, QR del formulario digital, procedimiento operativo y Resolución RSFC-2026-678-E-UBA-DIREC#LANARI.
   - **Movimientos y agenda:** altas, pases, camas esperando, agenda semanal, próximos ingresos y traslados pendientes.
   - **Espera y suspensiones:** ingresos de los próximos 14 días, OP pendientes, reprogramaciones y suspensiones por falta de cama.
   - **Indicadores:** pedidos por mes, Sala/UTI, cápita/extracápita y calidad del registro.
-  - **Solicitud de internación:** QR y acceso al formulario digital, el procedimiento operativo y la Resolución RSFC-2026-678-E-UBA-DIREC#LANARI (resumen, sin datos personales).
 - **Rechazos guardia:** datos que informan los administrativos de guardia (responsable Lorena Iriarte).
 - **Estadísticas:** planillas del Departamento de Estadística recopiladas por Corina Páez: resumen general (2024–2026) y vista interactiva por especialidad, con búsqueda de médicos y prácticas.
 
