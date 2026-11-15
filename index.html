@@ -491,7 +491,8 @@ const L = (() => {
         } else f = null;
       }
       const hm = norm(r[I.hora] instanceof Date ? r[I.hora].toTimeString() : r[I.hora]).match(/^(\d{1,2}):(\d{2})/);
-      const donde = norm(r[I.donde]);
+      // "Guardia Lanari", "Guardia externa Lanari" y "Lanari" son el mismo lugar
+      let donde = norm(r[I.donde]); if (/lanari/i.test(donde) && !/^(hospital|ambulancia)/i.test(donde)) donde = 'Guardia Lanari';
       out.push({ n: norm(r[I.n]), fecha: f, mes: mes || (f ? f.getMonth() + 1 : null), hora: hm ? +hm[1] : null, paciente: norm(r[I.pac]), dni: norm(r[I.dni]).replace(/\D/g, ''),
         tipo: norm(r[I.tipo]), cat: norm(r[I.cat]) || 'No especificado', motivo: norm(r[I.mot]), dx: norm(r[I.dx]) || 'No consignado', donde,
         origen: !donde ? 'No consignado' : /^hospital/i.test(donde) ? 'Otro hospital' : /^ambulancia/i.test(donde) ? 'Ambulancia' : /lanari/i.test(donde) ? 'Guardia Lanari' : 'Otro',
