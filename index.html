@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gestión de camas · Instituto Lanari</title>
+<title>Auditoría médica y gestión hospitalaria · Instituto Lanari</title>
 <link rel="icon" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
@@ -103,7 +103,7 @@ td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace}
 .state h2{margin:0 0 8px;font-size:17px}
 .state p{color:var(--muted);margin:6px 0 14px}
 .state .btn{color:var(--ink);border-color:var(--line);background:#fff;padding:8px 14px;font-size:13px}
-.state .btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.pri,.state .btn.pri{text-decoration:none;background:var(--accent);color:#fff;border-color:var(--accent)}
 .note{font-size:12px;color:var(--muted);margin-top:8px}
 .warn{background:#fdf6e7;border:1px solid #f2d9a8;color:#7a5410;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px}
 .hbar{display:flex;height:14px;border-radius:3px;overflow:hidden;min-width:120px;background:#f0f1ee}
@@ -147,6 +147,21 @@ td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace}
 .warn{background:#fff6e0;border:1px solid #f0d58a;color:#6b5210;border-radius:8px;padding:6px 10px;font-size:12px;margin:6px 0}
 button.lnk,a.lnk{background:none;border:0;color:#0f5e6e;font:inherit;font-size:12.5px;cursor:pointer;padding:6px 0;text-decoration:underline}
 @media (max-width:560px){.esp-grid{grid-template-columns:1fr}}
+.ddmenu{position:fixed;z-index:50;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:6px;min-width:230px}
+.ddmenu a{display:block;padding:9px 12px;border-radius:7px;color:var(--ink);text-decoration:none;font-size:14px}
+.ddmenu a:hover{background:#eef3f0}.ddmenu a.on{background:#14322f;color:#fff}
+.segs a{display:inline-block;padding:8px 16px;font-size:13.5px;color:#33413c;text-decoration:none;background:#fff;border-right:1px solid #cfd8d3}
+.segs a:last-child{border-right:0}.segs a.on{background:#14322f;color:#fff}
+.credit.mini{padding:10px 16px;gap:12px}.credit.mini .av{width:46px;height:46px;font-size:16px}.credit.mini h2{font-size:14.5px}
+.sol-grid{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:14px;align-items:start}
+.qrbox{text-align:center}.qrbox img{width:220px;height:220px;image-rendering:pixelated;border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff}
+.pasos{counter-reset:p;list-style:none;padding:0;margin:0}
+.pasos>li{counter-increment:p;position:relative;padding:0 0 14px 44px}
+.pasos>li:before{content:counter(p);position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;background:#0f5e6e;color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center}
+.pasos h3{margin:4px 0 4px;font-size:14.5px}.pasos ul{margin:4px 0 0;padding-left:18px}.pasos li li{font-size:13.5px;margin:2px 0}
+.aviso{background:#fff6e0;border:1px solid #f0d58a;border-radius:10px;padding:10px 14px;font-size:13.5px;margin:10px 0}
+.art{display:grid;grid-template-columns:70px 1fr;gap:4px 10px;font-size:13.5px}.art b{color:#14322f}
+@media (max-width:760px){.sol-grid{grid-template-columns:1fr}}
 .lchart{width:100%;height:auto}
 .lchart text{font-family:"IBM Plex Sans";font-size:11px;fill:#68716d}
 .serie-key{display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:12px;color:var(--muted)}
@@ -171,8 +186,8 @@ label.btn{display:inline-block}
       <img id="logo" src="logo.png" alt="Instituto de Investigaciones Médicas Alfredo Lanari · Universidad de Buenos Aires" onerror="this.remove();document.querySelector('.brand .sep').remove()">
       <span class="sep"></span>
       <div>
-        <h1>Gestión de camas e internación</h1>
-        <div class="inst">Auditoría médica y gestión hospitalaria · uso interno</div>
+        <h1>Auditoría médica y gestión hospitalaria</h1>
+        <div class="inst">Instituto Lanari · uso interno</div>
       </div>
     </div>
     <div class="src">
@@ -187,13 +202,12 @@ label.btn{display:inline-block}
   </div>
   <nav id="nav">
     <a href="#mapa">Mapa de camas</a>
-    <a href="#movimientos">Movimientos y agenda</a>
-    <a href="#espera">Espera y suspensiones</a>
-    <a href="#indicadores">Indicadores</a>
+    <a href="#movimientos" id="navGestion" data-grupo="gestion">Gestión de camas ▾</a>
     <a href="#rechazos">Rechazos guardia</a>
     <a href="#estadisticas">Estadísticas</a>
   </nav>
 </header>
+<div class="ddmenu" id="ddGestion" hidden></div>
 <main id="main"><div class="state"><h2>Cargando…</h2></div></main>
 <footer>Instituto de Investigaciones Médicas Alfredo Lanari (IDIM, UBA-CONICET) · Av. Combatientes de Malvinas 3150, CABA · Uso interno: auditoría médica y gestión de camas</footer>
 <div class="tip" id="tip"></div>
@@ -591,9 +605,16 @@ const L = (() => {
     let months = null, hdr = '', sec = '', pend = '', tbl = null;
     const aniosHoja = norm(hoja).match(/\b20\d{2}\b/g) || [];
     let ctx = aniosHoja.length === 1 ? +aniosHoja[0] : null; const ctxHoja = ctx !== null;
-    for (const r of rows || []) {
+    const esMesA = r => r && MESES_ES.indexOf(up(r[0]).replace(/\s+$/, '')) >= 0;
+    const textos = r => r.slice(1, 13).filter(c => { const x = norm(c); return x && num(x) === null && !celdaMes(x) && !/^(total|tot|%)$/i.test(x); }).length;
+    for (let ri = 0; ri < (rows || []).length; ri++) {
+      const r = rows[ri];
       const lab = norm(r[0]);
       const cols = r.slice(1, 13);
+      // Filas con texto en las columnas de datos (listados nominales, encabezados no mensuales) o marcadas como omitidas: cortan la tabla.
+      if (/^\(fila omitida\)/.test(lab) || textos(r) >= 2 && !esMesA(rows[ri + 1]) && !esMesA(rows[ri + 2])) { months = null; tbl = null; pend = ''; continue; }
+      // Encabezado con años en columnas (resumen anual): no es una tabla mensual
+      if (cols.filter(esAnio).length >= 3) { months = null; tbl = null; pend = ''; continue; }
       const ms = cols.map(celdaMes);
       if (ms.filter(Boolean).length >= 3) {
         months = ms; hdr = lab; if (pend) sec = pend; pend = ''; tbl = null; continue;
@@ -623,6 +644,16 @@ const L = (() => {
       if (/\btotal\b/i.test(lab)) { tbl.total = meses; tbl.totalLabel = lab; continue; }
       tbl.filas.push({ label: lab, meses });
     }
+    const sinTit = {};
+    tablas.forEach(t => {
+      // Última fila = suma exacta de las demás en todos los meses → es un subtotal de la planilla
+      if (t.filas.length >= 3) {
+        const u = t.filas[t.filas.length - 1], resto = t.filas.slice(0, -1);
+        const ok = u.meses.every((v, i) => (v || 0) === resto.reduce((s, f) => s + (f.meses[i] || 0), 0)) && u.meses.some(v => v);
+        if (ok) { t.filas.pop(); if (!t.total) { t.total = u.meses; t.totalLabel = u.label; } if (!t.partes.length) { t.partes.push(u.label); t.titulo = u.label; t.sinEncabezado = false; } }
+      }
+      if (!t.partes.length) { sinTit[t.anio] = (sinTit[t.anio] || 0) + 1; t.partes.push('Tabla sin título en la planilla (' + sinTit[t.anio] + ')'); t.titulo = t.partes[0]; }
+    });
     tablas.forEach(t => {
       if (t.sinEncabezado && t.filas.filter(f => /^dra?\.?\s/i.test(f.label)).length > t.filas.length / 2) { t.partes.push('por profesional'); t.titulo = t.partes.join(' · '); }
     });
@@ -782,6 +813,7 @@ async function fetchData(manual) {
       if (r.error === 'sesion_vencida') { SES = null; saveSes(); DATA = null; return loginView('mail', '', ERR.sesion_vencida); }
       throw new Error(ERR[r.error] || r.error);
     }
+    FOTOS = r.fotos || {};
     load(r.hojas, 'Planilla en vivo', r.generado);
     setUserUI();
   } catch (e) {
@@ -820,15 +852,43 @@ $('#fileIn').onchange = async ev => {
 $('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari_priv', PRIV ? '1' : '0'); } catch (e) {} render(); };
 
 /* ---------- Render ---------- */
-const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'rechazos', 'estadisticas'];
+const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas'];
+const GESTION = [['movimientos', 'Movimientos y agenda'], ['espera', 'Espera y suspensiones'], ['indicadores', 'Indicadores'], ['solicitud', 'Solicitud de internación']];
+let ULT_GESTION = 'movimientos', FOTOS = {};
+/* Responsables de cada área (las fotos llegan del servidor sólo con sesión iniciada) */
+const AREAS = {
+  gestion: { foto: 'paula', ini: 'PA', titulo: 'Sector de Gestión de Camas', texto: 'Responsable: <b>Paula Appugliese</b>. Los datos de camas, movimientos, espera y suspensiones provienen de la planilla que suministra su área.' },
+  guardia: { foto: 'lorena', ini: 'LI', titulo: 'Guardia · Administración', texto: 'Responsable: <b>Lorena Iriarte</b>. Los rechazos provienen de los datos que informan los administrativos de guardia por mail.' },
+  estad: { foto: 'corina', ini: 'CP', titulo: 'Departamento de Estadística · Instituto Lanari', texto: 'Información recopilada por <b>Corina Páez</b>, a partir de los registros mensuales de cada servicio.' }
+};
+function areaCard(k, meta, compacta) {
+  const a = AREAS[k], f = FOTOS[a.foto];
+  return `<div class="credit${compacta ? ' mini' : ''}"><div class="av">${f ? `<img src="${f}" alt="">` : a.ini}</div>
+    <div><h2>${a.titulo}</h2><p>${a.texto}</p></div>${meta ? `<div class="meta">${meta}</div>` : ''}</div>`;
+}
+function cabGestion(v) {
+  return areaCard('gestion', '', true) + `<div class="segs">${GESTION.map(g => `<a href="#${g[0]}" class="${g[0] === v ? 'on' : ''}">${g[1]}</a>`).join('')}</div>`;
+}
 function view() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'mapa'; }
 window.addEventListener('hashchange', render);
+$('#navGestion').addEventListener('click', ev => {
+  ev.preventDefault();
+  const m = $('#ddGestion'), r = ev.currentTarget.getBoundingClientRect();
+  if (!m.hidden) { m.hidden = true; return; }
+  m.innerHTML = GESTION.map(g => `<a href="#${g[0]}" class="${g[0] === view() ? 'on' : ''}">${g[1]}</a>`).join('');
+  m.style.left = r.left + 'px'; m.style.top = (r.bottom + 2) + 'px'; m.hidden = false;
+});
+document.addEventListener('click', ev => { const m = $('#ddGestion'); if (!m.hidden && !ev.target.closest('#navGestion')) m.hidden = true; });
+window.addEventListener('scroll', () => { $('#ddGestion').hidden = true; }, { passive: true });
 function render() {
   $('#btnPriv').textContent = PRIV ? 'Mostrar nombres' : 'Ocultar nombres';
-  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + view()));
-  if (!DATA) return;
   const v = view();
-  $('#main').innerHTML = ({ mapa: vMapa, movimientos: vMov, espera: vEspera, indicadores: vInd, rechazos: vRech, estadisticas: vEst })[v]();
+  if (GESTION.some(g => g[0] === v)) ULT_GESTION = v;
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.grupo === 'gestion' ? GESTION.some(g => g[0] === v) : a.getAttribute('href') === '#' + v));
+  $('#navGestion').setAttribute('href', '#' + ULT_GESTION);
+  if (!DATA) return;
+  const vista = ({ mapa: () => areaCard('gestion', '', true) + vMapa(), movimientos: vMov, espera: vEspera, indicadores: vInd, solicitud: vSolicitud, rechazos: vRech, estadisticas: vEst })[v]();
+  $('#main').innerHTML = GESTION.some(g => g[0] === v) ? cabGestion(v) + vista : vista;
   if (v === 'rechazos') bindRech();
   if (v === 'estadisticas') bindEst();
   bindTips();
@@ -976,7 +1036,43 @@ function hbars(entries, total, color) {
   return entries.map(([k, v]) => `<div class="hrow"><span>${esc(k)}</span><div class="tr"><i style="width:${v / mx * 100}%;background:${typeof color === 'function' ? color(k) : color}"></i></div><span class="v">${v}${total ? ' · ' + Math.round(v / total * 100) + '%' : ''}</span></div>`).join('');
 }
 const countBy = (arr, f) => { const o = {}; arr.forEach(x => { const k = f(x); if (k != null) o[k] = (o[k] || 0) + 1; }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
-function vRech() {
+function vSolicitud() {
+  const FORM = 'https://johzb3.short.gy/2jMVl1';
+  return `<div class="sol-grid">
+    <div class="card qrbox"><h2>Formulario de pedido de camas</h2>
+      <p style="font-size:13.5px">El formulario digital es el <b>único medio válido</b> para solicitar camas de internación.</p>
+      <img src="qr_solicitud.png" alt="Código QR del formulario de pedido de camas">
+      <p style="margin:10px 0"><a class="btn pri" href="${FORM}" target="_blank" rel="noopener">Abrir el formulario</a></p>
+      <p class="note">Escanear con el celular, o abrirlo desde las terminales de los consultorios. También está en la página de inicio del sitio oficial de la institución.</p>
+      <div class="aviso"><b>Importante:</b> la confirmación del trámite no garantiza la disponibilidad inmediata. La asignación efectiva de la unidad queda sujeta a la disponibilidad operativa y al flujo de altas y urgencias del día.</div>
+    </div>
+    <div class="card"><h2>Procedimiento operativo para la solicitud y asignación de camas</h2>
+      <div class="sub">Objetivo: agilizar la autorización ante las obras sociales (especialmente PAMI) y mejorar la comunicación entre el cuerpo médico, el sector administrativo y el paciente.</div>
+      <ol class="pasos" style="margin-top:12px">
+        <li><h3>Pedido médico</h3>El médico solicitante completa el formulario de pedido de camas con todos los datos requeridos (terminales de consultorios o celular).</li>
+        <li><h3>Instrucciones al paciente y documentación</h3>El médico indica al paciente que se dirija a la <b>Secretaría de Sala (1.º piso)</b>, de lunes a viernes de 08:00 a 14:30 h. Requisito excluyente:
+          <ul><li><b>Orden de internación</b> con fecha prevista, diagnóstico y procedimiento a realizar.</li><li><b>Carpeta médica completa</b>: estudios, imágenes e informes pertinentes al procedimiento.</li></ul></li>
+        <li><h3>Gestión administrativa y Hemoterapia</h3>La Secretaría de Sala recibe la documentación y:
+          <ul><li>inicia la solicitud de autorización ante la obra social;</li><li>deriva al paciente a Hemoterapia para los trámites o estudios preventivos;</li><li>le informa que será contactado por teléfono o mail cuando la autorización esté confirmada.</li></ul></li>
+        <li><h3>Confirmación y asignación</h3>Con la autorización en estado <b>OK</b>, la Secretaría de Sala informa al servicio de asignación de camas, que garantiza la disponibilidad para la fecha indicada y notifica la confirmación al paciente y al médico tratante.</li>
+      </ol>
+      <div class="aviso"><b>Cláusula de disponibilidad:</b> el personal debe aclarar al paciente que la internación queda siempre sujeta a la disponibilidad efectiva de camas al momento del ingreso, para evitar conflictos si hay que reprogramar.</div>
+    </div>
+  </div>
+  <div class="card"><h2>Marco normativo · Resolución RSFC-2026-678-E-UBA-DIREC#LANARI</h2>
+    <div class="sub">Dirección del Instituto de Investigaciones Médicas Alfredo Lanari · 15 de abril de 2026 · Expediente EX-2026-01971267- -UBA-DEMESA#LANARI</div>
+    <div class="art" style="margin-top:10px">
+      <b>Art. 1.º</b><span>Aprueba el Procedimiento Operativo para la Solicitud y Asignación de Camas de Internación (orden 3, COPDI-2026-01985496-UBA-DIPERS#LANARI).</span>
+      <b>Art. 2.º</b><span>Asigna la programación y asignación de camas disponibles a la Sra. <b>Paula Appugliese</b> (administrativa, sector UBE).</span>
+      <b>Art. 3.º</b><span>Asigna la función administrativa de gestión de pacientes en la Unidad de Breve Estadía al Sr. <b>Alejandro Martínez</b>.</span>
+      <b>Art. 4.º</b><span>El esquema será auditado transversalmente por la Sra. <b>Corina Páez</b> (supervisora y auditora de procedimientos administrativos).</span>
+      <b>Art. 5.º</b><span>De forma.</span>
+    </div>
+    <p class="note">Firmada digitalmente por Norberto Raúl Lafos (Director) y Gonzalo Martín Battaglia (Subdirector). El procedimiento fue presentado por el Dr. Ricardo Franzosi, Director del Área de Gestión de Sistemas Hospitalarios y Auditoría Médica. El documento original no se publica completo en el panel porque incluye datos personales.</p>
+  </div>`;
+}
+function vRech() { return areaCard('guardia', '', true) + vRech0(); }
+function vRech0() {
   const R = DATA.rechazos;
   if (!R) return `<div class="state"><h2>Sin datos de rechazos</h2><p>No encontré la pestaña de rechazos (con la columna “Categoría de motivo”) en los datos cargados.</p></div>`;
   const vig = R.filter(r => r.vigente), anul = R.length - vig.length, aRev = R.filter(r => /revisar/i.test(r.estado)).length;
@@ -1103,9 +1199,7 @@ function vEst() {
   const metaG = (E.meta || []).filter(m => m.tipo === 'general').filter((m, i, a) => a.findIndex(x => x.archivo === m.archivo) === i);
   const nEspArch = new Set((E.meta || []).filter(m => m.tipo === 'especialidad').map(m => m.archivo)).size;
   const sinc = (E.meta || []).map(m => m.actualizado).filter(Boolean).sort().pop();
-  return `<div class="credit"><div class="av" id="corinaAv">CP</div>
-      <div><h2>Departamento de Estadística · Instituto Lanari</h2><p>Información recopilada por <b>Corina Páez</b>, a partir de los registros mensuales de cada servicio.</p></div>
-      <div class="meta">${metaG.map(m => `${m.anio}: ${esc(m.archivo)}`).join('<br>')}${nEspArch ? `<br>${nEspArch} planillas por especialidad` : ''}${sinc ? '<br>Sincronizado: ' + esc(sinc) : ''}</div></div>
+  return `${areaCard('estad', `${metaG.map(m => `${m.anio}: ${esc(m.archivo)}`).join('<br>')}${nEspArch ? `<br>${nEspArch} planillas por especialidad` : ''}${sinc ? '<br>Sincronizado: ' + esc(sinc) : ''}`)}
     <div class="segs" id="estModo">${gen ? `<button data-m="general" class="${EF.modo === 'general' ? 'on' : ''}">Resumen general</button>` : ''}${esp ? `<button data-m="especialidad" class="${EF.modo === 'especialidad' ? 'on' : ''}">Por especialidad</button>` : ''}</div>
     ${EF.modo === 'general' && gen ? vEstGeneral(E) : esp ? vEstEsp(E) : '<p class="note">No hay planillas por especialidad.</p>'}`;
 }
@@ -1131,15 +1225,23 @@ function vEspBody(E) {
   if (!EF.espAnio || !anios.includes(EF.espAnio)) EF.espAnio = anios[anios.length - 1];
   const Y = e.anios[EF.espAnio], P = e.anios[EF.espAnio - 1];
   const kY = claveTablas(Y.tablas), kP = P ? claveTablas(P.tablas) : [];
-  let tablas = Y.tablas.map((t, i) => ({ t, k: kY[i], p: P ? P.tablas[kP.indexOf(kY[i])] : null }));
+  const ultimaParte = t => normQ(t.partes[t.partes.length - 1] || t.titulo);
+  const buscarPrev = (t, k) => {
+    if (!P) return null;
+    const i = kP.indexOf(k); if (i >= 0) return P.tablas[i];
+    const c = P.tablas.filter(x => ultimaParte(x) === ultimaParte(t));
+    return c.length === 1 && Y.tablas.filter(x => ultimaParte(x) === ultimaParte(t)).length === 1 ? c[0] : null;
+  };
+  const nEsp = Math.max(...Y.tablas.map(ultMes));
+  let tablas = Y.tablas.map((t, i) => ({ t, k: kY[i], p: buscarPrev(t, kY[i]) }));
   if (q) tablas = tablas.map(o => ({ ...o, filas: o.t.filas.filter(f => normQ(f.label).includes(q) || normQ(o.t.titulo).includes(q)) })).filter(o => o.filas.length);
   return `<div class="rfil"><b>Año:</b><select id="espAnio">${anios.map(a => `<option ${a === EF.espAnio ? 'selected' : ''}>${a}</option>`).join('')}</select>
       <span class="note" style="margin:0">Fuente: <b>${esc(Y.archivo)}</b>${Y.modificado ? ' (modificado ' + esc(Y.modificado) + ')' : ''}${Y.alternativos.length ? ` · se usó la planilla más reciente; también existe: ${Y.alternativos.map(esc).join(', ')}` : ''}.</span></div>
     ${!tablas.length ? '<p class="note">Sin coincidencias en esta especialidad.</p>' : ''}
-    <div class="esp-grid">${tablas.map(o => tarjetaTabla(o.t, o.p, o.k, o.filas)).join('')}</div>`;
+    <div class="esp-grid">${tablas.map(o => tarjetaTabla(o.t, o.p, o.k, o.filas, nEsp)).join('')}</div>`;
 }
-function tarjetaTabla(t, p, k, filasFiltro) {
-  const n = ultMes(t), tot = sumaFilas(t, n), totP = p ? sumaFilas(p, n) : null;
+function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
+  const n = nEsp || ultMes(t), tot = sumaFilas(t, n), totP = p ? sumaFilas(p, n) : null;
   const abierta = EF.abiertas[EF.esp + '|' + k] || !!filasFiltro && filasFiltro.length < t.filas.length;
   const filas = (filasFiltro || t.filas).map(f => ({ f, v: sumN(f.meses, n), pv: p ? (p.filas.find(x => normQ(x.label) === normQ(f.label)) || null) : null })).sort((a, b) => b.v - a.v);
   const mx = Math.max(1, ...filas.map(x => x.v));
@@ -1236,7 +1338,6 @@ function bindEst() {
   const q = $('#espQ'); if (q) q.oninput = () => { EF.q = q.value; redrawEsp(); };
   const tt = $('#espTodas'); if (tt) tt.onchange = () => { EF.todas = tt.checked; redrawEsp(); };
   if ($('#espBody')) bindEspBody();
-  if (window.CORINA_FOTO) { const av = $('#corinaAv'); if (av) av.innerHTML = `<img src="${window.CORINA_FOTO}" alt="Corina Páez">`; }
 }
 /* Tooltip */
 function bindTips() {

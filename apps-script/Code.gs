@@ -19,6 +19,8 @@ const CONFIG = {
   ESTAD_CARPETAS: ['1Y7Q5ZOh1NXoGuuYXa_bHGCmNSQpRxc2S', '1XEHbFk3d0JQHLgMr-wigKKwhSipOugrY', '1IsmuQLEc8Re3LoM30PFHKvvhX0NNNNvR'], // Est. especialidad 2024 / 2025 / 2026
   ESTAD_EXTRA: [{ anio: 2024, id: '1R_xKkRv2sf24LNLkEFC-lG3WiGnC4IIyZVXUhljhHbQ', titulo: 'Estadisticas 2024 (base para panel)' }],
   ESTAD_HORA: 6,
+  // Fotos de las responsables de cada área (archivo privado en el Drive del dueño del script; no está en el repositorio).
+  FOTOS_ID: '1bGnNU5jAT4N9v-wDIS5TcxDRhPFVtMxh',
   DOMINIO: 'lanari.uba.ar',
   HOJA_ACCESO: 'ACCESO',          // opcional: lista blanca de mails en la columna A
   HOJA_LOG: 'LOG ACCESOS',        // opcional: si existe, se registran ingresos y consultas
@@ -133,7 +135,15 @@ function datos_(token) {
     catch (err) { console.warn('Rechazos no disponibles: ' + err); }
   }
   log_(email, 'consulta');
-  return { ok: true, email: email, generado: new Date().toISOString(), hojas: hojas };
+  return { ok: true, email: email, generado: new Date().toISOString(), hojas: hojas, fotos: fotos_() };
+}
+
+function fotos_() {
+  if (!CONFIG.FOTOS_ID) return {};
+  const c = CacheService.getScriptCache(); const h = c.get('fotos');
+  if (h) return JSON.parse(h);
+  try { const t = DriveApp.getFileById(CONFIG.FOTOS_ID).getBlob().getDataAsString(); c.put('fotos', t, 21600); return JSON.parse(t); }
+  catch (e) { console.warn('Fotos: ' + e); return {}; }
 }
 
 function salir_(token) {
@@ -202,7 +212,7 @@ function actualizarEstadisticas(forzar) {
             headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, payload: JSON.stringify({ name: 'tmp estadistica', mimeType: 'application/vnd.google-apps.spreadsheet' }), muteHttpExceptions: true });
           tmpId = JSON.parse(r.getContentText()).id; ss = SpreadsheetApp.openById(tmpId);
         }
-        hojas = ss.getSheets().map(sh => ({ nombre: sh.getName(), vals: sh.getDataRange().getValues().map(row => row.map(v => v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : (v === null ? '' : String(v)))) }));
+        hojas = ss.getSheets().map(sh => ({ nombre: sh.getName(), vals: (a.tipo === 'especialidad' ? sanitizar_ : x => x)(sh.getDataRange().getValues().map(row => row.map(v => v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : (v === null ? '' : String(v))))) }));
       } catch (e) { console.warn(a.titulo + ': ' + e); }
       finally { if (tmpId) try { DriveApp.getFileById(tmpId).setTrashed(true); } catch (e) {} }
     }
@@ -229,6 +239,19 @@ function actualizarEstadisticas(forzar) {
   props.setProperty('EST_VISTOS', JSON.stringify(vistos));
   console.log('Archivos: ' + lista.length + ' · pestañas: ' + (meta.length - 1));
   return lista.length;
+}
+
+/**
+ * Quita filas con texto en las columnas de datos (B a M): son listados nominales de pacientes
+ * (p. ej. Neurocirugía: nombre, estadía, mes, cirujano) que el panel no debe recibir.
+ * Se conservan los encabezados de tablas con meses en filas (Servicio Social).
+ */
+function sanitizar_(vals) {
+  const MESES = /^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)$/i;
+  const esMesA = r => r && MESES.test(String(r[0]).trim());
+  const esNum = x => x !== '' && !isNaN(Number(String(x).replace(',', '.')));
+  const textos = r => r.slice(1, 13).filter(c => { const x = String(c).trim(); return x && !esNum(x) && !/^\d{4}-\d{2}-\d{2}$/.test(x) && !/^[a-z]{2,4}\.?-\d{2}$/i.test(x) && !/^(total|tot|%)$/i.test(x); }).length;
+  return vals.map((r, i) => textos(r) >= 2 && !esMesA(vals[i + 1]) && !esMesA(vals[i + 2]) ? ['(fila omitida)'] : r);
 }
 
 /* ---------- Utilidades ---------- */

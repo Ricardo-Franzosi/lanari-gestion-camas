@@ -3,13 +3,25 @@
 Panel web de **consulta** del estado de camas e internaciones del Instituto Lanari (IDIM-UBA). Muestra:
 
 - **Mapa de camas:** 1º piso con UBE, 2º piso, UTI y Guardia, con un indicador de camas libres por sector. Compara la ocupación contra la matriz de 58 camas y marca aislamiento y pases. En el 2º piso, D1–D2 (Hemodinamia) y D5–D6 (Trasplante) se muestran como **reservadas** cuando están desocupadas y no cuentan como libres; D3–D4 son Internación general.
-- **Movimientos y agenda:** altas, pases, camas esperando, agenda semanal, próximos ingresos y traslados pendientes.
-- **Espera y suspensiones:** ingresos de los próximos 14 días, OP pendientes, reprogramaciones y suspensiones por falta de cama.
-- **Indicadores:** pedidos por mes, Sala/UTI, cápita/extracápita y calidad del registro.
+- **Gestión de camas** (menú desplegable; datos del Sector de Gestión de Camas, responsable Paula Appugliese):
+  - **Movimientos y agenda:** altas, pases, camas esperando, agenda semanal, próximos ingresos y traslados pendientes.
+  - **Espera y suspensiones:** ingresos de los próximos 14 días, OP pendientes, reprogramaciones y suspensiones por falta de cama.
+  - **Indicadores:** pedidos por mes, Sala/UTI, cápita/extracápita y calidad del registro.
+  - **Solicitud de internación:** QR y acceso al formulario digital, el procedimiento operativo y la Resolución RSFC-2026-678-E-UBA-DIREC#LANARI (resumen, sin datos personales).
+- **Rechazos guardia:** datos que informan los administrativos de guardia (responsable Lorena Iriarte).
+- **Estadísticas:** planillas del Departamento de Estadística recopiladas por Corina Páez: resumen general (2024–2026) y vista interactiva por especialidad, con búsqueda de médicos y prácticas.
+
+Las fotos de las responsables de cada área no están en el repositorio: el servidor las envía solo después de iniciar sesión (archivo privado en Drive, `CONFIG.FOTOS_ID`).
 
 > **Este repositorio no contiene datos de pacientes.** La página lee la planilla de Google *“SOLICITUD DE CAMAS PARA INTERNACION”* en el momento de cada consulta, a través de un Google Apps Script, y solo después de verificar el acceso. Nunca subas exports, Excel ni CSV con datos (el `.gitignore` los bloquea).
 
-- **Rechazos guardia:** estadísticas de los rechazos informados por la guardia: por mes, motivo, falta de camas por área, hora y turno, diagnósticos, origen, pacientes rechazados más de una vez, y un detalle filtrable.
+## Estadísticas (copia automática)
+
+- `actualizarEstadisticas()` en [`apps-script/Code.gs`](apps-script/Code.gs) corre **todos los días a las 6:00** (se instala con `instalarEstadisticas()`).
+- Lee **solo** las carpetas “Est. especialidad 2024 / 2025 / 2026” de Corina Páez y la planilla general 2024; convierte cada Excel y guarda los valores como texto en la hoja privada “Panel camas Lanari - estadísticas (copia automática)”.
+- Si un mismo archivo está en varias carpetas, usa el más reciente. En el panel, para cada especialidad y año se muestra la planilla más reciente que tenga ese año.
+- Antes de guardar, **descarta las filas con texto en las columnas de datos** (listados nominales de pacientes, como los de Neurocirugía), para que no lleguen al panel.
+- Las hojas de valorización en pesos se descartan en el panel.
 
 ## Rechazos desde la guardia (carga automática)
 
