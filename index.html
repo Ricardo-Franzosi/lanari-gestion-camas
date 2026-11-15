@@ -1107,7 +1107,10 @@ function vRech0() {
   byMes.forEach(b => b.otros = b.total - b.uti - b.cama);
   const mx = Math.max(1, ...byMes.map(b => b.total));
   const ult = byMes[byMes.length - 1], prev = byMes[byMes.length - 2];
-  const reps = countBy(per.filter(r => r.dni || r.paciente), r => r.dni || r.paciente).filter(e => e[1] > 1);
+  // Rechazos del mismo paciente en la misma fecha cuentan como uno solo
+  const diasPac = {};
+  per.filter(r => r.dni || r.paciente).forEach(r => { const k = r.dni || r.paciente; (diasPac[k] = diasPac[k] || new Set()).add(r.fecha ? F(r.fecha) : 's/f'); });
+  const reps = Object.entries(diasPac).map(([k, s]) => [k, s.size]).filter(e => e[1] > 1).sort((a, b) => b[1] - a[1]);
   const pacOf = k => per.find(r => (r.dni || r.paciente) === k);
   const dows = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']; const dowC = Array(7).fill(0); per.forEach(r => { if (r.fecha) dowC[(r.fecha.getDay() + 6) % 7]++; });
   const hrC = Array(24).fill(0); per.forEach(r => { if (r.hora != null) hrC[r.hora]++; }); const hmx = Math.max(1, ...hrC);
@@ -1140,9 +1143,9 @@ function vRech0() {
       <div class="card"><h2>Diagnósticos más frecuentes</h2><div class="sub">Top 10 · ${esc(perLbl)} · ${dxNC} sin diagnóstico consignado</div>${hbars(dxs.filter(e => e[0] !== 'No consignado').slice(0, 10), per.length, '#0f5e6e')}</div>
       <div class="card"><h2>¿Dónde aguardaba el paciente?</h2><div class="sub">Origen del pedido</div>${hbars(countBy(per, r => r.origen), per.length, '#1f6fb2')}
         <div class="sub" style="margin-top:10px">Lugares más frecuentes</div>${hbars(countBy(per.filter(r => r.donde), r => r.donde).slice(0, 8), 0, '#7aa6d1')}</div>
-      <div class="card"><h2>Pacientes rechazados más de una vez</h2><div class="sub">${reps.length} pacientes · ${esc(perLbl)}</div><div class="tw" style="max-height:330px">
+      <div class="card"><h2>Pacientes rechazados más de una vez</h2><div class="sub">${reps.length} pacientes · ${esc(perLbl)} · los rechazos del mismo día cuentan como uno</div><div class="tw" style="max-height:330px">
         <table><tr><th>Paciente</th><th class="num">Rechazos</th><th>Fechas</th><th>Motivos</th></tr>${reps.map(([k, n]) => { const xs = per.filter(r => (r.dni || r.paciente) === k); const p = pacOf(k);
-          return `<tr><td>${nm(p.paciente, p.dni)}</td><td class="num"><b>${n}</b></td><td>${xs.map(r => F(r.fecha).slice(0, 5)).join(', ')}</td><td>${[...new Set(xs.map(r => r.motivo))].map(esc).join('; ')}</td></tr>`; }).join('') || '<tr><td colspan="4" class="empty">Ninguno.</td></tr>'}</table></div></div>
+          return `<tr><td>${nm(p.paciente, p.dni)}</td><td class="num"><b>${n}</b></td><td>${[...new Set(xs.slice().sort((a, b) => (a.fecha || 0) - (b.fecha || 0)).map(r => F(r.fecha).slice(0, 5)))].join(', ')}</td><td>${[...new Set(xs.map(r => r.motivo))].map(esc).join('; ')}</td></tr>`; }).join('') || '<tr><td colspan="4" class="empty">Ninguno.</td></tr>'}</table></div></div>
     </div>
     <div class="card"><h2>Detalle de rechazos</h2><div class="rfil" style="margin:6px 0 8px"><b>Motivo:</b><select id="rfCat"><option value="all">Todos</option>${countBy(per, r => r.cat).map(([c]) => `<option ${RF.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="note" style="margin:0">${sel.length} rechazos</span></div>
       <div class="tw"><table><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Motivo</th><th>Diagnóstico</th><th>Dónde aguardaba</th></tr>
