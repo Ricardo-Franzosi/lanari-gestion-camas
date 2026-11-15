@@ -642,8 +642,10 @@ const L = (() => {
           if (cands.length !== 1) return;
           const c = cands[0];
           const exacta = c.iguales === con.length && c.tr === tot;
-          const lab = c.r.label.replace(/\s+/g, ' ').trim(), lindo = (/^[A-ZÁÉÍÓÚÑ .()/]+$/.test(lab) ? lab.charAt(0) + lab.slice(1).toLowerCase() : lab).replace(/^hosp\.? de d[ií]a/i, 'Hospital de Día').replace(/oncologia/i, 'Oncología').replace(/^dema[nm]?[dt]a esp[a-záéíóú]*/i, 'Demanda espontánea');
-          t.tituloPlanilla = t.titulo; const nom = lindo;
+          const lab = c.r.label.replace(/\s+/g, ' ').trim(), lindo = (/^[A-ZÁÉÍÓÚÑ .()/]+$/.test(lab) ? lab.charAt(0) + lab.slice(1).toLowerCase() : lab).replace(/^hosp\.? de d[ií]a/i, 'Hospital de día').replace(/oncologia/i, 'Oncología').replace(/^dema[nm]?[dt]a esp[a-záéíóú]*/i, 'Demanda espontánea');
+          // Dentro de la pestaña de la especialidad no hace falta repetir su nombre entre paréntesis
+          const sinA = x => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          t.tituloPlanilla = t.titulo; const nom = lindo.replace(/\s*\(([^)]+)\)\s*$/, (m, p) => sinA(p) === sinA(e.nombre) ? '' : m);
           t.partes = [nom]; t.titulo = nom; t.dudosa = false; t.ambigua = !exacta; // casi coincide: título asignado y «En revisión»
           if (exacta) t.coincideGeneral = true;
           t.hermanaEnRevision = true; // la otra tabla con el mismo título queda sin explicar
