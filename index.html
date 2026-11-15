@@ -584,7 +584,7 @@ const L = (() => {
     }));
     const sinT = t => /^Tabla sin título/.test(t.partes[0] || '') || t.dudosa;
     const ponerTitulo = (t, x, origen) => {
-      x = x.replace(/^dema[nm]?[dt]a esp\w*/i, 'Demanda espontánea');
+      x = x.replace(/^dema[nm]?[dt]a esp[a-záéíóú]*/i, 'Demanda espontánea');
       if (t.dudosa) { t.tituloPlanilla = t.titulo; t.partes = [x]; t.titulo = x; t.dudosa = false; t.tituloOrigen = 'en la planilla se llama «' + t.tituloPlanilla + '», igual que otra tabla; ' + origen; return; }
       const resto = t.partes.slice(1); t.partes = [x, ...resto]; t.titulo = t.partes.join(' · '); t.tituloOrigen = origen;
     };
@@ -625,12 +625,38 @@ const L = (() => {
           }
         });
       });
+      // Títulos genéricos ("Cantidad de consult. X Pac.", etc.) que casi coinciden con una fila de hospital de día, consultas o estudios
+      // de la planilla general (≥ 75% de los meses iguales y total dentro del 5%): se renombran como «probable», sin confirmar
+      Object.entries(e.anios).forEach(([y, Y]) => {
+        const G = lista.find(a => a.anio === +y); if (!G) return;
+        Y.tablas.forEach(t => {
+          if (t.coincideGeneral || !/x\s*pac|x\s*m[eé]dico|^tabla sin/i.test(t.titulo)) return;
+          const ser = Array.from({ length: 12 }, (_, i) => t.filas.reduce((s, f) => s + (f.meses[i] || 0), 0));
+          const con = ser.map((v, i) => i).filter(i => ser[i]); if (con.length < 4) return;
+          const tot = ser.reduce((a, b) => a + b, 0);
+          const cands = [...G.datos.hospDia, ...G.datos.consultas, ...G.datos.estudios].map(r => {
+            const iguales = con.filter(i => (r.meses[i] || 0) === ser[i]).length;
+            const tr = con.reduce((s, i) => s + (r.meses[i] || 0), 0);
+            return { r, ok: iguales / con.length >= 0.75 && Math.abs(tr - tot) <= tot * 0.05, iguales, tr };
+          }).filter(c => c.ok);
+          if (cands.length !== 1) return;
+          const c = cands[0];
+          const exacta = c.iguales === con.length && c.tr === tot;
+          const lab = c.r.label.replace(/\s+/g, ' ').trim(), lindo = /^[A-ZÁÉÍÓÚÑ .()/]+$/.test(lab) ? lab.charAt(0) + lab.slice(1).toLowerCase() : lab;
+          t.tituloPlanilla = t.titulo; const nom = exacta ? lindo : lindo + ' (probable)';
+          t.partes = [nom]; t.titulo = nom; t.dudosa = false; t.ambigua = false;
+          if (exacta) t.coincideGeneral = true;
+          t.hermanaEnRevision = true; // la otra tabla con el mismo título queda sin explicar
+          t.tituloOrigen = 'en la planilla se llama «' + t.tituloPlanilla + '»; ' + (exacta ? 'coincide mes a mes con la fila «' + lab + '» de la planilla general'
+            : 'casi coincide con la fila «' + lab + '» de la planilla general (' + c.iguales + ' de ' + con.length + ' meses iguales; ' + c.tr + ' contra ' + tot + '); no confirmado');
+        });
+      });
       // Las que siguen con el mismo título: distinguirlas por el tipo de filas o por orden, y marcarlas para consultar
       Object.values(e.anios).forEach(Y => {
         const grupos = {};
         Y.tablas.filter(t => t.dudosa).forEach(t => (grupos[t.titulo.toLowerCase()] = grupos[t.titulo.toLowerCase()] || []).push(t));
         Object.values(grupos).forEach(g => {
-          if (g.length < 2) { g.forEach(t => { t.dudosa = false; }); return; }
+          if (g.length < 2) { g.forEach(t => { t.dudosa = false; if (Y.tablas.some(x => x !== t && x.hermanaEnRevision && x.clave0 && x.clave0.split('#')[0] === t.clave0.split('#')[0])) { t.ambigua = true; t.tituloPlanilla = t.titulo; } }); return; }
           const tipo = t => t.filas.filter(f => /^(dra?|lic|prof)\.?\s/i.test(f.label)).length > t.filas.length / 2 ? 'por profesional' : 'por práctica';
           const tipos = g.map(tipo);
           g.forEach((t, i) => {
