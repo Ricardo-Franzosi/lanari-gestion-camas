@@ -141,7 +141,7 @@ td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace}
 .esp-chips button small{font-size:10.5px;color:#7a847f}
 .esp-chips button.on{background:#0f5e6e;border-color:#0f5e6e;color:#fff}.esp-chips button.on small{color:#cfe6ea}
 .esp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:14px}
-.esp-card h2{font-size:14.5px}
+.esp-card h2{font-size:14.5px}.esp-card.revision{opacity:.8;border-style:dashed}
 .esp-kpi{display:flex;align-items:baseline;gap:10px;margin:4px 0 2px}.esp-kpi b{font-size:24px;color:#14322f}
 .esp-t td,.esp-m td{font-size:12.5px}.esp-m th{font-size:11.5px}.esp-m tr.tot td{border-top:2px solid #cfd8d3;font-weight:600}
 .warn{background:#fff6e0;border:1px solid #f0d58a;color:#6b5210;border-radius:8px;padding:6px 10px;font-size:12px;margin:6px 0}
@@ -1454,6 +1454,8 @@ function vEspBody(E) {
   };
   const nEsp = Math.max(...Y.tablas.map(ultMes));
   let tablas = Y.tablas.map((t, i) => ({ t, k: kY[i], p: buscarPrev(t, kY[i]) }));
+  // Tablas en revisión (título repetido sin aclarar): al final
+  tablas = tablas.filter(o => !o.t.ambigua).concat(tablas.filter(o => o.t.ambigua));
   if (q) tablas = tablas.map(o => ({ ...o, filas: o.t.filas.filter(f => normQ(f.label).includes(q) || normQ(o.t.titulo).includes(q)) })).filter(o => o.filas.length);
   return `<div class="rfil"><b>Año:</b><select id="espAnio">${anios.map(a => `<option ${a === EF.espAnio ? 'selected' : ''}>${a}</option>`).join('')}</select>
       <span class="note" style="margin:0">Fuente: <b>${esc(Y.archivo)}</b>${Y.modificado ? ' (modificado ' + esc(Y.modificado) + ')' : ''}${Y.alternativos.length ? ` · se usó la planilla más reciente; también existe: ${Y.alternativos.map(esc).join(', ')}` : ''}.</span></div>
@@ -1473,8 +1475,9 @@ function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
   const mx = Math.max(1, ...filas.map(x => x.v));
   const totPlan = t.total ? sumN(t.total, n) : null;
   const per = n === 12 ? 'año completo' : `ene–${MESL[n - 1].toLowerCase()}`;
-  const pct = d => `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`;
-  return `<div class="card esp-card"><h2>${esc(t.titulo)}</h2>
+  const pct = d => Math.abs(d) < 0.5 ? '<span class="delta eq">0%</span>' : `<span class="delta ${Math.abs(d) < 1 ? 'eq' : d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : ''}${d.toFixed(0)}%</span>`;
+  return `<div class="card esp-card${t.ambigua ? ' revision' : ''}"><h2>${esc(t.titulo)}</h2>
+    ${t.ambigua ? `<p class="warn" style="background:#fdecea;border-color:#f1b0a8;color:#8a1f12"><b>En revisión:</b> no está claro qué mide esta tabla. Mirarla con reserva hasta que Corina Páez acomode los datos en la planilla.</p>` : ''}
     <div class="sub">${EF.espAnio} · ${per}${t.hoja ? ' · hoja «' + esc(t.hoja) + '»' : ''}</div>
     ${t.tituloOrigen ? `<div class="sub" style="font-style:italic">Título asignado: ${esc(t.tituloOrigen)}.</div>` : typeof t.coincideGeneral === 'string' ? `<div class="sub" style="color:#1f7a4d">✓ Coincide mes a mes con «${esc(t.coincideGeneral)}» de la planilla general.</div>` : ''}
     <div class="esp-kpi"><b>${fmtN(tot)}</b>${p ? delta(tot, totP) : '<span class="delta eq">sin año anterior para comparar</span>'}</div>
