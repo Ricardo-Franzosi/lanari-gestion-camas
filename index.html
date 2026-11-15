@@ -757,12 +757,15 @@ const L = (() => {
       if (/^val/i.test(a.archivo)) return;
       const hojasUtiles = a.hojas.filter(h => !/^\s*val/i.test(h.hoja));
       const nombresHoja = new Set(hojasUtiles.map(h => sinAnios(h.hoja).replace(/comp\.?$/i, '').trim().toLowerCase()).filter(Boolean));
-      const prefijar = nombresHoja.size > 1;
+      // Un mismo archivo con una hoja por servicio (Hematología / Reumatología): cada hoja es su propia especialidad
+      const separar = a.esp === 'Hematología y Reumatología';
+      const prefijar = nombresHoja.size > 1 && !separar;
       hojasUtiles.forEach(h => parseTablasHoja(h.rows, h.hoja).forEach(t => {
         if (!t.anio) return;
+        const nombreEsp = separar ? (/reumat/i.test(h.hoja) ? 'Reumatología' : 'Hematología') : a.esp;
         if (prefijar) { const p = sinAnios(h.hoja); if (p && !t.partes.some(x => x.toLowerCase() === p.toLowerCase())) { t.partes.unshift(p); t.titulo = t.partes.join(' · '); } }
         t.archivo = a.archivo; t.hoja = h.hoja; t.modificado = a.modificado;
-        const e = esp[a.esp] = esp[a.esp] || { nombre: a.esp, porAnio: {} };
+        const e = esp[nombreEsp] = esp[nombreEsp] || { nombre: nombreEsp, porAnio: {} };
         const y = e.porAnio[t.anio] = e.porAnio[t.anio] || {};
         (y[a.archivo] = y[a.archivo] || []).push(t);
       }));
