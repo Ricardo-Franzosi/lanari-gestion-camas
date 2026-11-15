@@ -60,7 +60,8 @@ main{padding:18px 20px 40px;max-width:1500px;margin:0 auto}
 .bed.LIBRE .st{color:#fff;font-size:11px;background:#ffffff2e;padding:1px 6px;border-radius:8px}
 .bed.LIBRE .id{font-weight:600;font-size:15px}
 .bed.LIBRE.aisl{box-shadow:inset 0 0 0 3px #f6c343,0 2px 8px #1f8a5b55}
-.kpi.free{background:#1f8a5b;border-color:#17673f;color:#fff}.kpi.free span{color:#e3f4ea}
+.kpi.free{background:#1f8a5b;border-color:#17673f;color:#fff}.kpi.free span{color:#e3f4ea}.kpi.free small{font-size:14px;opacity:.75;margin-left:2px}
+.kpi.free.zero{background:#fbe5e2;border-color:#e8b4ad;color:#9b2c20}.kpi.free.zero span{color:#9b2c20}
 .freebar{background:#fff;border:2px solid #1f8a5b;border-radius:12px;padding:12px 16px;margin-bottom:14px}
 .freebar h2{margin:0 0 8px;font-size:15px;color:#17673f}
 .freebar .row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0}
@@ -583,9 +584,9 @@ function kpisGlobal() {
   const t0 = today(), t1 = new Date(+t0 + 864e5);
   const prog = DATA.pedidos.filter(p => p.ing && +p.ing >= +t0 && +p.ing <= +t1 && !/cancel|suspend/i.test(p.motivo + p.nombre)).length;
   return `<div class="kpis">
+    ${DATA.camas.sect.map(s => `<div class="kpi free ${s.libres ? '' : 'zero'}"><b>${s.libres}${s.matriz ? '<small>/' + s.total + '</small>' : ''}</b><span>Libres · ${esc(s.nombre)}</span></div>`).join('')}
     <div class="kpi"><b>${oc}/${tot}</b><span>Ocupadas (matriz ${S.reduce((a, s) => a + s.matriz, 0)})</span></div>
     <div class="kpi"><b>${tot ? Math.round(oc / tot * 100) : 0}%</b><span>Ocupación internación</span></div>
-    <div class="kpi free"><b>${li}</b><span>Camas libres en internación</span></div>
     <div class="kpi"><b>${all.filter(c => c.aisl && c.aisl !== 'SIN AISLAMIENTO' && c.estado !== 'LIBRE').length}</b><span>Pacientes en aislamiento</span></div>
     <div class="kpi"><b>${n('ALTA') + n('LIBERE LA CAMA')}</b><span>Altas / liberan cama</span></div>
     <div class="kpi"><b>${n('PASE')}</b><span>Pases pendientes</span></div>
