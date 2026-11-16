@@ -213,6 +213,7 @@ label.btn{display:inline-block}
     <a href="#solicitud" id="navGestion" data-grupo="gestion">Gestión de camas ▾</a>
     <a href="#rechazos">Rechazos guardia</a>
     <a href="#estadisticas">Estadísticas</a>
+    <a href="#facturacion">Facturación PAMI</a>
   </nav>
 </header>
 <div class="ddmenu" id="ddGestion" hidden></div>
@@ -974,9 +975,9 @@ function setUserUI() {
   $('#btnRefresh').hidden = !SES; $('#btnOut').hidden = !SES;
   $('#who').textContent = SES ? SES.email : '';
 }
-$('#btnRefresh').onclick = () => { ESTAD = null; estError = ''; fetchData(true); };
+$('#btnRefresh').onclick = () => { ESTAD = null; estError = ''; FACT = null; factError = ''; fetchData(true); };
 $('#btnOut').onclick = async () => {
-  const t = SES && SES.token; SES = null; saveSes(); DATA = null; ESTAD = null; clearTimeout(refreshTimer);
+  const t = SES && SES.token; SES = null; saveSes(); DATA = null; ESTAD = null; FACT = null; clearTimeout(refreshTimer);
   $('#fresh').textContent = 'Sesión cerrada';
   loginView('mail');
   if (t) try { await api({ action: 'logout', token: t }); } catch (e) {}
@@ -994,13 +995,14 @@ $('#fileIn').onchange = async ev => {
 $('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari_priv', PRIV ? '1' : '0'); } catch (e) {} render(); };
 
 /* ---------- Render ---------- */
-const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas'];
+const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas', 'facturacion'];
 const GESTION = [['solicitud', 'Solicitud de internación'], ['movimientos', 'Movimientos y agenda'], ['espera', 'Espera y suspensiones'], ['indicadores', 'Indicadores']];
 let ULT_GESTION = 'solicitud', FOTOS = {};
 /* Responsables de cada área (las fotos llegan del servidor sólo con sesión iniciada) */
 const AREAS = {
   gestion: { foto: 'paula', ini: 'PA', titulo: 'Sector de Gestión de Camas', texto: 'Responsable: <b>Paula Appugliese</b>. Los datos de camas, movimientos, espera y suspensiones provienen de la planilla que suministra su área.' },
   guardia: { foto: 'lorena', ini: 'LI', titulo: 'Guardia · Administración', texto: 'Responsable: <b>Lorena Iriarte</b>. Los rechazos provienen de los datos que informan los administrativos de guardia por mail.' },
+  fact: { foto: 'griselda', ini: 'GR', titulo: 'Facturación PAMI · Administración', texto: 'Responsable de supervisar los procesos administrativos y la carga de la documentación respaldatoria: <b>Griselda Rios</b>.' },
   estad: { foto: 'corina', ini: 'CP', titulo: 'Departamento de Estadística · Instituto Lanari', texto: 'Información recopilada por <b>Corina Páez</b>, a partir de los registros mensuales de cada servicio.' }
 };
 function areaCard(k, meta, compacta) {
@@ -1029,10 +1031,11 @@ function render() {
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.grupo === 'gestion' ? GESTION.some(g => g[0] === v) : a.getAttribute('href') === '#' + v));
   $('#navGestion').setAttribute('href', '#' + ULT_GESTION);
   if (!DATA) return;
-  const vista = ({ mapa: () => areaCard('gestion', '', true) + vMapa(), movimientos: vMov, espera: vEspera, indicadores: vInd, solicitud: vSolicitud, rechazos: vRech, estadisticas: vEst })[v]();
+  const vista = ({ mapa: () => areaCard('gestion', '', true) + vMapa(), movimientos: vMov, espera: vEspera, indicadores: vInd, solicitud: vSolicitud, rechazos: vRech, estadisticas: vEst, facturacion: vFact })[v]();
   $('#main').innerHTML = GESTION.some(g => g[0] === v) ? cabGestion(v) + vista : vista;
   if (v === 'rechazos') bindRech();
   if (v === 'estadisticas') bindEst();
+  if (v === 'facturacion') bindFact();
   bindTips();
 }
 const cls = s => String(s).replace(/\s+/g, '_');
@@ -1217,7 +1220,7 @@ function vSolicitud() {
     <p class="note">Firmada digitalmente por Norberto Raúl Lafos (Director) y Gonzalo Martín Battaglia (Subdirector). El procedimiento fue presentado por el Dr. Ricardo Franzosi, Director del Área de Gestión de Sistemas Hospitalarios y Auditoría Médica. El documento original no se publica completo en el panel porque incluye datos personales.</p>
   </div>`;
 }
-function vRech() { return areaCard('guardia', '', true) + vRech0(); }
+function vRech() { if (!FACT && API && SES && !factError) setTimeout(cargarFact, 0); return areaCard('guardia', '', true) + vRech0(); }
 function vRech0() {
   const R = DATA.rechazos;
   if (!R) return `<div class="state"><h2>Sin datos de rechazos</h2><p>No encontré la pestaña de rechazos (con la columna “Categoría de motivo”) en los datos cargados.</p></div>`;
@@ -1244,6 +1247,14 @@ function vRech0() {
   const hrC = Array(24).fill(0); per.forEach(r => { if (r.hora != null) hrC[r.hora]++; }); const hmx = Math.max(1, ...hrC);
   const turno = { 'Mañana (7–13)': 0, 'Tarde (13–19)': 0, 'Noche (19–7)': 0 }; per.forEach(r => { if (r.hora == null) return; turno[r.hora >= 7 && r.hora < 13 ? 'Mañana (7–13)' : r.hora >= 13 && r.hora < 19 ? 'Tarde (13–19)' : 'Noche (19–7)']++; });
   const perLbl = RF.mes === 'all' ? 'todo 2026' : MESES[RF.mes - 1];
+  // Valor $ de los recuperos PAMI asociados (episodios únicos; un episodio puede reunir varios rechazos del mismo paciente)
+  const epiSet = new Set(); if (FACT) per.forEach(r => { const e = FACT.porNro[r.n]; if (e) epiSet.add(e); });
+  const valPer = [...epiSet].reduce((s, e) => s + e.costo, 0);
+  const selSet = new Set(); if (FACT) sel.forEach(r => { const e = FACT.porNro[r.n]; if (e) selSet.add(e); });
+  const valSel = [...selSet].reduce((s, e) => s + e.costo, 0);
+  const celdaVal = r => { if (!FACT) return `<td class="num" style="color:var(--muted)">${factCargando ? '…' : '—'}</td>`; const e = FACT.porNro[r.n];
+    if (e) return `<td class="num" title="${esc(e.prest)} · ${e.meses} mes(es) · OP ${esc(e.ops)}"><b>${fmtN(e.costo)}</b>${e.meses > 1 ? `<br><span style="font-size:11px;color:var(--muted)">${e.meses} meses</span>` : ''}</td>`;
+    const s = FACT.sinNro[r.n]; return `<td class="num" style="color:var(--muted)" title="${esc(s ? s.nota : '')}">—</td>`; };
   return `<div class="rfil"><b>Período:</b>
       <select id="rfMes"><option value="all">Todo el año</option>${meses.map(m => `<option value="${m}" ${+RF.mes === m ? 'selected' : ''}>${MESES[m - 1]}</option>`).join('')}</select>
       <span class="note" style="margin:0">Estadísticas sobre rechazos <b>vigentes</b> (se excluyen ${anul} anulados${dup ? ` y ${dup} duplicados: mismo paciente y misma fecha, cuentan una vez` : ''}). Fuente: mails de guardia, cargados automáticamente cada día a las 7:00.${aRev ? ` <span class="tag w">${aRev} a revisar en la planilla</span>` : ''}</span></div>
@@ -1254,6 +1265,7 @@ function vRech0() {
       <div class="kpi"><b>${RF.mes === 'all' ? (vig.length / Math.max(1, meses.length)).toFixed(1) : (per.length / 30 * 7).toFixed(1)}</b><span>${RF.mes === 'all' ? 'Promedio por mes' : 'Promedio por semana'}</span></div>
       ${RF.mes === 'all' && ult ? `<div class="kpi"><b>${ult.total}</b><span>${MESES[ult.m - 1]} (mes en curso)${prev ? ' · ' + MESES[prev.m - 1] + ': ' + prev.total : ''}</span></div>` : ''}
       <div class="kpi"><b>${reps.length}</b><span>Pacientes rechazados más de una vez</span></div>
+      <div class="kpi" style="border-color:#e8b4ad"><b style="color:#c0392b">${FACT ? fmtMM(valPer) : (factCargando ? '…' : '—')}</b><span>Recuperado por PAMI por estos rechazos (${epiSet.size} internaciones en otro prestador)</span></div>
     </div>
     <div class="card"><h2>Rechazos vigentes por mes</h2><div class="sub">Tocá un mes para filtrar todo el tablero.
       <span class="sw" style="background:#7f1d1d"></span>Falta de camas en UTI<span class="sw" style="background:#e07a6e"></span>Falta de camas (sala / institución / guardia)<span class="sw" style="background:#c9cfcb"></span>Otros motivos</div>
@@ -1275,15 +1287,232 @@ function vRech0() {
         <table><tr><th>Paciente</th><th class="num">Rechazos</th><th>Fechas</th><th>Motivos</th></tr>${reps.map(([k, n]) => { const xs = per.filter(r => (r.dni || r.paciente) === k); const p = pacOf(k);
           return `<tr><td>${nm(p.paciente, p.dni)}</td><td class="num"><b>${n}</b></td><td>${[...new Set(xs.slice().sort((a, b) => (a.fecha || 0) - (b.fecha || 0)).map(r => F(r.fecha).slice(0, 5)))].join(', ')}</td><td>${[...new Set(xs.map(r => r.motivo))].map(esc).join('; ')}</td></tr>`; }).join('') || '<tr><td colspan="4" class="empty">Ninguno.</td></tr>'}</table></div></div>
     </div>
-    <div class="card"><h2>Detalle de rechazos</h2><div class="rfil" style="margin:6px 0 8px"><b>Motivo:</b><select id="rfCat"><option value="all">Todos</option>${countBy(per, r => r.cat).map(([c]) => `<option ${RF.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="note" style="margin:0">${sel.length} rechazos</span></div>
-      <div class="tw"><table><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Motivo</th><th>Diagnóstico</th><th>Dónde aguardaba</th></tr>
+    <div class="card"><h2>Detalle de rechazos</h2><div class="rfil" style="margin:6px 0 8px"><b>Motivo:</b><select id="rfCat"><option value="all">Todos</option>${countBy(per, r => r.cat).map(([c]) => `<option ${RF.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="note" style="margin:0">${sel.length} rechazos${FACT ? ' · recuperado por PAMI: ' + fmtM(valSel) : ''}</span></div>
+      <div class="tw"><table><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Tipo</th><th>Motivo</th><th>Diagnóstico</th><th>Dónde aguardaba</th><th class="num">$ recupero PAMI</th></tr>
       ${sel.slice().sort((a, b) => (b.fecha || 0) - (a.fecha || 0)).map(r => `<tr><td>${F(r.fecha)}</td><td class="mono">${r.hora != null ? String(r.hora).padStart(2, '0') + 'h' : ''}</td><td>${nm(r.paciente, r.dni)}</td><td>${esc(r.tipo.replace('Rechazo ', '').replace(/^./, c => c.toUpperCase()))}</td>
-        <td><span class="tag" style="background:${catCol(r.cat)}22;color:${catCol(r.cat)}">${esc(r.cat)}</span><br><span style="color:var(--muted);font-size:12px">${esc(r.motivo)}</span></td><td>${esc(r.dx)}</td><td>${esc(r.dondeRaw || '—')}</td></tr>`).join('')}</table></div></div>`;
+        <td><span class="tag" style="background:${catCol(r.cat)}22;color:${catCol(r.cat)}">${esc(r.cat)}</span><br><span style="color:var(--muted);font-size:12px">${esc(r.motivo)}</span></td><td>${esc(r.dx)}</td><td>${esc(r.dondeRaw || '—')}</td>${celdaVal(r)}</tr>`).join('')}</table></div>
+      <p class="note">$ recupero PAMI: lo que PAMI le recupera al Lanari por la internación del paciente en otro prestador (OP del mes y, si la internación siguió, las OP de los meses siguientes) + cargo administrativo. Detalle en Facturación PAMI → Recuperos y rechazos.</p></div>`;
 }
 function bindRech() {
   const m = $('#rfMes'); if (m) m.onchange = () => { RF.mes = m.value; RF.cat = 'all'; render(); };
   const c = $('#rfCat'); if (c) c.onchange = () => { RF.cat = c.value; render(); };
   document.querySelectorAll('.vbar').forEach(b => b.onclick = () => { RF.mes = String(RF.mes) === b.dataset.mes ? 'all' : b.dataset.mes; RF.cat = 'all'; render(); });
+}
+
+/* ---------- Facturación PAMI (hoja privada servida por el Apps Script; responsable Griselda Rios) ---------- */
+let FACT = null, factCargando = false, factError = '';
+let FF = { sub: 'general', anio: 'all', espOrden: 'total', espAbierta: null, rClas: 'all', rAnio: 'all', rQ: '', rTodos: false };
+const fmtM = n => n == null || isNaN(n) ? '—' : '$ ' + Math.round(n).toLocaleString('es-AR');
+const fmtMM = n => n == null || isNaN(n) ? '—' : '$ ' + (n / 1e6).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' M';
+const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '—';
+const numF = v => typeof v === 'number' ? v : (v === '' || v == null ? 0 : Number(String(v).replace(/\./g, '').replace(',', '.')) || 0);
+function tablaObj(rows) {
+  if (!rows || rows.length < 2) return [];
+  const h = rows[0].map(String);
+  return rows.slice(1).filter(r => r.some(v => v !== '' && v != null)).map(r => { const o = {}; h.forEach((k, i) => o[k] = r[i]); return o; });
+}
+/* Módulos del nomenclador PAMI agrupados por especialidad (criterio del panel; editable acá). */
+const ESPEC_MOD = {
+  'Hemodinamia': [208, 209, 210], 'Cirugía cardiovascular': [244, 245, 246], 'Marcapasos': [241, 242, 243],
+  'Neurocirugía': [202, 203, 204], 'Cirugía general y digestiva': [301, 305, 544], 'Urología': [310, 545], 'Ginecología': [306, 551],
+  'Cirugía de cabeza y cuello': [300], 'Cirugía torácica': [304], 'Cirugía maxilofacial': [302], 'Intervencionismo percutáneo': [303],
+  'Traumatología': [546, 25], 'Diagnóstico por imágenes': [24, 324, 22, 322], 'Gastroenterología y hepatología': [552, 550],
+  'Cardiología': [543], 'Hematología': [418], 'Endocrinología': [434], 'Diabetes y nutrición': [555, 557, 558], 'Dermatología': [537],
+  'Anatomía patológica': [542], 'Neurología': [541], 'Evaluación prequirúrgica': [330], 'Neumonología': [548], 'Nefrología': [549],
+  'Reumatología': [433], 'Infectología': [431], 'Fonoaudiología': [553], 'Tratamiento del dolor': [556], 'Flebología': [435],
+  'Otorrinolaringología': [437], 'Medicamentos excluidos y excedentes': [910, 902, 311], 'Laboratorio (fuera de cápita)': [5, 34], 'Procedimientos neurológicos (fuera de cápita)': [17, 19]
+};
+const MOD_ESP = {}; Object.entries(ESPEC_MOD).forEach(([e, ms]) => ms.forEach(m => MOD_ESP[m] = e));
+const espDe = r => { const c = +r.modulo_cod; if (c >= 600 && c < 700 || c === 144 || c === 145) return 'Oncología'; if (c === 69) return 'Internación por OP (módulo 69)'; return MOD_ESP[c] || ('Módulo ' + r.modulo_cod + ' · ' + r.modulo); };
+const GRUPOS_PREST = ['OP (módulos quirúrgicos/intervencionismo)', 'Pago por prestación', 'Oncología', 'Otros'];
+function parseFact(h) {
+  const liq = tablaObj(h.FAC_LIQ).map(r => ({ per: String(r.periodo_liq), grupo: r.grupo, imp: numF(r.importe) }));
+  const fac = tablaObj(h.FAC_FACT).map(r => ({ fecha: String(r.fecha_envio).slice(0, 10), tipo: r.tipo, num: r.numero, imp: numF(r.importe), pago: String(r.fecha_pago || ''), deb: numF(r.debito), dc: r.es_capita_dc === 'SI' }));
+  const mod = tablaObj(h.FAC_MOD).map(r => ({ per: String(r.periodo_liq), prest: String(r.periodo_prest), grupo: r.grupo, modulo_cod: String(r.modulo_cod), modulo: r.modulo, imp: numF(r.importe) }));
+  const lab = tablaObj(h.REC_LAB).map(r => ({ per: String(r.periodo_liq), mod: String(r.modulo_cod), nom: r.modulo, ops: numF(r.ops_listadas), list: numF(r.monto_listado), deb: numF(r.debito_recuperos_liquidado), cargo: numF(r.cargo_adm_liquidado) }));
+  const rech = tablaObj(h.REC_RECH).map(r => ({ tipo: r.tipo_fila, clas: r.clasificacion, nros: String(r.n_rechazo_guardia || '').split(',').map(s => s.trim()).filter(Boolean), fecha: String(r.fecha_rechazo || '').slice(0, 10),
+    pac: String(r.paciente || ''), ben: String(r.beneficio || ''), motivo: String(r.motivo || ''), prest: String(r.prestador_que_interno || ''), meses: numF(r.meses_internado), desde: String(r.prestacion_desde || ''), hasta: String(r.prestacion_hasta || ''),
+    op: String(r.op_inicial || ''), ops: String(r.ops || ''), monto: numF(r.monto_recupero), cargo: numF(r.cargo_adm), costo: numF(r.costo_total), liqs: String(r.liquidaciones || ''), nota: String(r.nota || '') }));
+  const meta = {}; tablaObj(h.META).forEach(r => meta[r.clave] = r.valor);
+  mod.forEach(r => r.esp = espDe(r));
+  // Valor por N° de rechazo de guardia (el episodio puede reunir varios rechazos del mismo paciente)
+  const porNro = {}; rech.filter(r => r.tipo === 'Con recupero').forEach(r => r.nros.forEach(n => porNro[n] = r));
+  const sinNro = {}; rech.filter(r => r.tipo === 'Sin recupero').forEach(r => r.nros.forEach(n => sinNro[n] = r));
+  return { liq, fac, mod, lab, rech, meta, porNro, sinNro };
+}
+async function cargarFact() {
+  if (factCargando || FACT || !API || !SES) return;
+  factCargando = true; factError = '';
+  try {
+    const r = await api({ action: 'facturacion', token: SES.token });
+    if (!r.ok) {
+      if (r.error === 'sesion_vencida') { SES = null; saveSes(); DATA = null; return loginView('mail', '', ERR.sesion_vencida); }
+      factError = r.error === 'accion_desconocida' ? 'El servidor todavía no tiene la versión del script con Facturación PAMI (falta implementar la versión nueva).' :
+        r.error === 'facturacion_no_configurada' ? 'Falta configurar la hoja de facturación en el script.' : (ERR[r.error] || r.error);
+    } else FACT = parseFact(r.hojas || {});
+  } catch (e) { factError = e.message; }
+  finally { factCargando = false; if (['facturacion', 'rechazos'].includes(view())) render(); }
+}
+const anioOk = (per, a) => a === 'all' || String(per).slice(0, 4) === String(a);
+function vFact() {
+  const head = areaCard('fact', FACT ? `Portal PAMI: ${esc(FACT.meta.fuente_portal || '')}<br>Facturas: ${esc(FACT.meta.fuente_facturas || '')}` : '');
+  if (!FACT) {
+    if (API && SES && !factError) { setTimeout(cargarFact, 0); return head + `<div class="state"><h2>Cargando facturación…</h2><p>Leyendo la hoja privada de Facturación PAMI.</p></div>`; }
+    return head + `<div class="state"><h2>Sin datos de facturación</h2><p>${esc(factError || 'La facturación se ve solo con sesión iniciada en el panel.')}</p>${API && SES ? '<div><button class="btn pri" id="factRetry">Reintentar</button></div>' : ''}</div>`;
+  }
+  const subs = [['general', 'Facturación general'], ['especialidades', 'Por especialidad'], ['recuperos', 'Recuperos y rechazos']];
+  const anios = [...new Set(FACT.liq.map(r => r.per.slice(0, 4)))].sort();
+  return head + `<div class="segs" id="factSub">${subs.map(s => `<button data-s="${s[0]}" class="${FF.sub === s[0] ? 'on' : ''}">${s[1]}</button>`).join('')}</div>
+    ${FF.sub !== 'recuperos' ? `<span class="rfil" style="display:inline-flex;margin-left:12px"><b>Año de liquidación:</b><select id="ffAnio"><option value="all">2025 y 2026</option>${anios.map(a => `<option ${String(FF.anio) === a ? 'selected' : ''}>${a}</option>`).join('')}</select></span>` : ''}
+    ${FF.sub === 'general' ? vFactGeneral() : FF.sub === 'especialidades' ? vFactEsp() : vFactRec()}`;
+}
+/* ---- 1. Facturación general ---- */
+function vFactGeneral() {
+  const A = FF.anio, L_ = FACT.liq.filter(r => anioOk(r.per, A));
+  const pers = [...new Set(L_.map(r => r.per))].sort();
+  const G = { dc: g => /^DC/.test(g), op: g => /^OP/.test(g), pp: g => g === 'Pago por prestación', onc: g => g === 'Oncología', inc: g => g === 'Incentivos', otr: g => g === 'Otros', rec: g => g === 'Débito por recuperos', car: g => g === 'Cargo adm. por rechazo' };
+  const fila = p => { const o = { p }; Object.entries(G).forEach(([k, f]) => o[k] = L_.filter(r => r.per === p && f(r.grupo)).reduce((s, r) => s + r.imp, 0)); o.bruto = o.dc + o.op + o.pp + o.onc + o.inc + o.otr; o.deb = -(o.rec + o.car); o.neto = o.bruto - o.deb; return o; };
+  const F_ = pers.map(fila);
+  const T = F_.reduce((t, o) => { Object.keys(o).forEach(k => { if (k !== 'p') t[k] = (t[k] || 0) + o[k]; }); return t; }, {});
+  const facs = FACT.fac.filter(f => anioOk(f.fecha, A));
+  const fx = facs.filter(f => f.tipo === 'FACTURA'), nc = facs.filter(f => f.tipo !== 'FACTURA');
+  const fImp = fx.reduce((s, f) => s + f.imp, 0), fDeb = fx.reduce((s, f) => s + f.deb, 0);
+  const meses = [...new Set(fx.map(f => f.fecha.slice(0, 7)))].sort();
+  const serie = (y, k) => Array.from({ length: 12 }, (_, i) => { const o = F_.find(x => x.p === `${y}-${String(i + 1).padStart(2, '0')}`); return o ? o[k] / 1e6 : null; });
+  const ys = [...new Set(pers.map(p => p.slice(0, 4)))];
+  const cols = ['#9aa7a1', '#0f5e6e'];
+  return `<div class="kpis">
+      <div class="kpi"><b>${fmtMM(T.bruto)}</b><span>Liquidado bruto PAMI (${pers.length} meses)</span></div>
+      <div class="kpi" style="border-color:#e8b4ad"><b style="color:#c0392b">${fmtMM(T.deb)}</b><span>Débitos por recuperos y cargo adm. · ${pct(T.deb, T.bruto)} del bruto</span></div>
+      <div class="kpi"><b>${fmtMM(T.neto)}</b><span>Neto liquidado</span></div>
+      <div class="kpi"><b>${fmtMM(T.bruto / Math.max(1, pers.length))}</b><span>Bruto promedio mensual</span></div>
+      <div class="kpi"><b>${fmtMM(fImp)}</b><span>Facturado al PAMI (${fx.length} facturas)</span></div>
+      <div class="kpi" style="border-color:#e8b4ad"><b style="color:#c0392b">${pct(fDeb, fImp)}</b><span>Débito sobre facturas (${fmtMM(fDeb)})</span></div>
+    </div>
+    <div class="card"><h2>Neto liquidado por mes</h2><div class="sub">En millones de pesos, por mes de liquidación</div>
+      ${lineChart(ys.map((y, i) => ({ name: y, vals: serie(y, 'neto'), color: cols[(i + cols.length - ys.length) % cols.length] || '#0f5e6e', w: 2.4 })), { H: 210 })}
+      <div class="leg">${ys.map((y, i) => `<span><i style="background:${cols[(i + cols.length - ys.length) % cols.length]}"></i>${y}</span>`).join('')}</div></div>
+    <div class="card"><h2>Liquidación PAMI por mes</h2><div class="sub">Portal de prestadores · Facturación de períodos (todos los conceptos). Débitos = débito por recuperos + cargo administrativo por rechazo (Res. 408/17).</div>
+      <div class="tw"><table class="esp-m"><tr><th>Mes liq.</th><th class="num">Cápita (DC + ajuste)</th><th class="num">Módulos OP</th><th class="num">Pago por prestación</th><th class="num">Oncología</th><th class="num">Incentivos</th><th class="num">Otros</th><th class="num">Bruto</th><th class="num">Débito recuperos</th><th class="num">Cargo adm.</th><th class="num">Neto</th><th class="num">% débito</th></tr>
+      ${F_.map(o => `<tr><td class="mono">${o.p.slice(5)}/${o.p.slice(0, 4)}</td>${['dc', 'op', 'pp', 'onc', 'inc', 'otr', 'bruto'].map(k => `<td class="num">${fmtN(o[k])}</td>`).join('')}<td class="num" style="color:#c0392b">${fmtN(-o.rec)}</td><td class="num" style="color:#c0392b">${fmtN(-o.car)}</td><td class="num"><b>${fmtN(o.neto)}</b></td><td class="num">${pct(o.deb, o.bruto)}</td></tr>`).join('')}
+      <tr class="tot"><td>Total</td>${['dc', 'op', 'pp', 'onc', 'inc', 'otr', 'bruto'].map(k => `<td class="num">${fmtN(T[k])}</td>`).join('')}<td class="num">${fmtN(-T.rec)}</td><td class="num">${fmtN(-T.car)}</td><td class="num">${fmtN(T.neto)}</td><td class="num">${pct(T.deb, T.bruto)}</td></tr></table></div></div>
+    <div class="card"><h2>Facturas presentadas al PAMI y débitos aplicados</h2><div class="sub">Planilla de Facturación/Cobranzas, por mes de envío. La factura de cápita (DC) lleva un débito con tope: 20 % en 2025 y 25 % desde 01/2026; el excedente se descuenta en meses siguientes.</div>
+      <div class="tw"><table class="esp-m"><tr><th>Mes de envío</th><th class="num">Facturas</th><th class="num">Facturado</th><th class="num">Débito</th><th class="num">% débito</th><th class="num">% débito factura cápita</th><th class="num">Cobradas</th><th class="num">Notas de crédito</th></tr>
+      ${meses.map(m => { const x = fx.filter(f => f.fecha.slice(0, 7) === m), d = x.filter(f => f.dc), i = x.reduce((s, f) => s + f.imp, 0), db = x.reduce((s, f) => s + f.deb, 0);
+        return `<tr><td class="mono">${m.slice(5)}/${m.slice(0, 4)}</td><td class="num">${x.length}</td><td class="num">${fmtN(i)}</td><td class="num" style="color:#c0392b">${fmtN(db)}</td><td class="num">${pct(db, i)}</td><td class="num">${d.length ? pct(d.reduce((s, f) => s + f.deb, 0), d.reduce((s, f) => s + f.imp, 0)) : '—'}</td><td class="num">${x.filter(f => f.pago).length}/${x.length}</td><td class="num">${fmtN(nc.filter(f => f.fecha.slice(0, 7) === m).reduce((s, f) => s + f.imp, 0))}</td></tr>`; }).join('')}
+      <tr class="tot"><td>Total</td><td class="num">${fx.length}</td><td class="num">${fmtN(fImp)}</td><td class="num">${fmtN(fDeb)}</td><td class="num">${pct(fDeb, fImp)}</td><td></td><td class="num">${fx.filter(f => f.pago).length}/${fx.length}</td><td class="num">${fmtN(nc.reduce((s, f) => s + f.imp, 0))}</td></tr></table></div>
+      <p class="note">El mes de envío de la factura no coincide necesariamente con el mes de liquidación del portal. Montos en pesos corrientes.</p></div>`;
+}
+/* ---- 2. Por especialidad ---- */
+function indEsp() {
+  const M = FACT.mod.filter(r => GRUPOS_PREST.includes(r.grupo) && anioOk(r.per, FF.anio));
+  const tot = M.reduce((s, r) => s + r.imp, 0);
+  const by = {}; M.forEach(r => { const e = by[r.esp] = by[r.esp] || { esp: r.esp, total: 0, mods: {}, porMes: {}, lagN: 0, lagS: 0 }; e.total += r.imp; e.mods[r.modulo_cod + ' · ' + r.modulo] = (e.mods[r.modulo_cod + ' · ' + r.modulo] || 0) + r.imp; e.porMes[r.per] = (e.porMes[r.per] || 0) + r.imp;
+    const lag = (+r.per.slice(0, 4) * 12 + +r.per.slice(5, 7)) - (+r.prest.slice(0, 4) * 12 + +r.prest.slice(5, 7)); if (r.imp > 0 && !isNaN(lag)) { e.lagS += lag * r.imp; e.lagN += r.imp; } });
+  const all = FACT.mod.filter(r => GRUPOS_PREST.includes(r.grupo));
+  const prom = (e, y) => { const ms = [...new Set(FACT.mod.filter(r => r.per.startsWith(y)).map(r => r.per))].length; const s = all.filter(r => r.esp === e && r.per.startsWith(y)).reduce((a, r) => a + r.imp, 0); return ms ? s / ms : 0; };
+  return { tot, rows: Object.values(by).map(e => { const meses = Object.keys(e.porMes).filter(k => e.porMes[k] > 0); const pico = Object.entries(e.porMes).sort((a, b) => b[1] - a[1])[0];
+    const p25 = prom(e.esp, '2025'), p26 = prom(e.esp, '2026');
+    return { ...e, part: tot ? e.total / tot : 0, nMeses: meses.length, prom: e.total / Math.max(1, meses.length), p25, p26, var: p25 ? (p26 - p25) / p25 : null, lag: e.lagN ? e.lagS / e.lagN : null, pico, nMods: Object.keys(e.mods).length }; }) };
+}
+function vFactEsp() {
+  const { tot, rows } = indEsp();
+  const ord = { total: (a, b) => b.total - a.total, part: (a, b) => b.part - a.part, prom: (a, b) => b.prom - a.prom, var: (a, b) => (b.var ?? -9) - (a.var ?? -9), lag: (a, b) => (b.lag ?? -1) - (a.lag ?? -1), meses: (a, b) => b.nMeses - a.nMeses }[FF.espOrden] || ((a, b) => b.total - a.total);
+  const R = rows.filter(r => r.total > 0).sort(ord); const mx = Math.max(1, ...R.map(r => r.total));
+  const top3 = R.slice().sort((a, b) => b.total - a.total).slice(0, 3).reduce((s, r) => s + r.part, 0);
+  const th = (k, t) => `<th class="num sortable ${FF.espOrden === k ? 'on' : ''}" data-ord="${k}">${t}${FF.espOrden === k ? ' ▾' : ''}</th>`;
+  const capita = FACT.mod.filter(r => /^DC/.test(r.grupo) && anioOk(r.per, FF.anio)).reduce((s, r) => s + r.imp, 0);
+  return `<div class="kpis">
+      <div class="kpi"><b>${fmtMM(tot)}</b><span>Facturación por prestación (módulos OP, pago por prestación y oncología)</span></div>
+      <div class="kpi"><b>${R.length}</b><span>Especialidades con facturación</span></div>
+      <div class="kpi"><b>${(top3 * 100).toFixed(0)}%</b><span>Concentración en las 3 primeras</span></div>
+      <div class="kpi"><b>${fmtMM(capita)}</b><span>Cápita (aparte: no se atribuye a especialidades)</span></div>
+    </div>
+    <div class="card"><h2>Ranking por facturación</h2><div class="sub">Tocá una especialidad para ver sus códigos y la evolución mensual. Encabezados ordenables. Promedios mensuales: 2025 sobre 12 meses de liquidación; 2026 sobre los meses liquidados del año.</div>
+      <div class="tw" style="max-height:none"><table class="ind-t"><tr><th>#</th><th>Especialidad</th><th></th>${th('total', 'Facturado')}${th('part', '% del total')}${th('prom', 'Promedio mensual')}${th('var', 'Var. prom. 2026 vs 2025')}${th('meses', 'Meses con fact.')}${th('lag', 'Demora prest.→liq. (meses)')}<th>Mes pico</th></tr>
+      ${R.map((r, i) => `<tr class="clk ${FF.espAbierta === r.esp ? 'sel' : ''}" data-e="${esc(r.esp)}"><td class="num">${i + 1}</td><td><b>${esc(r.esp)}</b>${r.nMods > 1 ? ` <span class="note" style="margin:0">(${r.nMods} códigos)</span>` : ''}</td><td style="width:16%"><div class="hbar"><i style="width:${r.total / mx * 100}%;background:#0f5e6e"></i></div></td>
+        <td class="num">${fmtN(r.total)}</td><td class="num">${(r.part * 100).toFixed(1)}%</td><td class="num">${fmtN(r.prom)}</td>
+        <td class="num">${r.var == null ? '<span class="delta eq">—</span>' : `<span class="delta ${Math.abs(r.var) < .01 ? 'eq' : r.var > 0 ? 'up' : 'dn'}">${r.var > 0 ? '+' : ''}${(r.var * 100).toFixed(0)}%</span>`}</td>
+        <td class="num">${r.nMeses}</td><td class="num">${r.lag == null ? '—' : r.lag.toFixed(1)}</td><td class="mono">${r.pico ? r.pico[0].slice(5) + '/' + r.pico[0].slice(0, 4) : ''}</td></tr>
+        ${FF.espAbierta === r.esp ? `<tr class="det"><td colspan="10">${detEsp(r)}</td></tr>` : ''}`).join('')}</table></div>
+      <p class="note">Fuente: liquidación del portal PAMI por módulo. Cada especialidad reúne los módulos del nomenclador que le corresponden (p. ej. Hemodinamia = módulos 208, 209 y 210). Demora = meses promedio entre el período de prestación y el de liquidación, ponderado por monto. Sin cantidades: el portal informa solo montos por módulo.</p></div>`;
+}
+function detEsp(r) {
+  const ys = ['2025', '2026'], cols = ['#9aa7a1', '#0f5e6e'];
+  const serie = y => Array.from({ length: 12 }, (_, i) => { const k = `${y}-${String(i + 1).padStart(2, '0')}`; const has = FACT.liq.some(x => x.per === k); return has ? (r.porMes[k] || 0) / 1e6 : null; });
+  const mods = Object.entries(r.mods).sort((a, b) => b[1] - a[1]);
+  return `<div class="ind-det"><div>${lineChart(ys.map((y, i) => ({ name: y, vals: serie(y), color: cols[i], w: i ? 2.6 : 1.8, dash: !i })), { H: 180 })}
+    <div class="leg">${ys.map((y, i) => `<span><i style="background:${cols[i]}"></i>${y} (millones $)</span>`).join('')}</div></div>
+    <div class="ind-src"><b>Códigos incluidos</b>${mods.map(([k, v]) => `<p>${esc(k)}: ${fmtM(v)} (${(v / r.total * 100).toFixed(0)}%)</p>`).join('')}</div></div>`;
+}
+/* ---- 3. Recuperos y rechazos ---- */
+const CLAS_COL = { 'Rechazo conformado (guardia 2026)': '#0f5e6e', 'Rechazo registrado en libro de guardia': '#1f6fb2', 'Sin rechazo conformado (de oficio u otro)': '#c0392b' };
+function vFactRec() {
+  const E = FACT.rech.filter(r => r.tipo === 'Con recupero'), S = FACT.rech.filter(r => r.tipo === 'Sin recupero');
+  const tot = E.reduce((s, r) => s + r.costo, 0);
+  const clases = Object.keys(CLAS_COL);
+  const resumen = clases.map(c => { const x = E.filter(r => r.clas === c); return { c, n: x.length, ops: x.reduce((s, r) => s + r.meses, 0), monto: x.reduce((s, r) => s + r.costo, 0), prol: x.filter(r => r.meses >= 3).length }; });
+  // Laboratorio y otros módulos de cápita
+  const labPers = [...new Set(FACT.lab.map(r => r.per))].sort();
+  const lab = (p, m, k) => FACT.lab.filter(r => r.per === p && r.mod === m).reduce((s, r) => s + r[k], 0);
+  const labT = (m, k) => FACT.lab.filter(r => r.mod === m).reduce((s, r) => s + r[k], 0);
+  // Prestadores
+  const byP = {}; E.forEach(r => { const o = byP[r.prest] = byP[r.prest] || { n: 0, m: 0 }; o.n++; o.m += r.costo; });
+  const topP = Object.entries(byP).sort((a, b) => b[1].m - a[1].m).slice(0, 10); const mxP = Math.max(1, ...topP.map(p => p[1].m));
+  // Tabla filtrada
+  const q = normQ(FF.rQ);
+  let T = FACT.rech.filter(r => (FF.rClas === 'all' || r.clas === FF.rClas || (FF.rClas === 'sinrec' && r.tipo === 'Sin recupero')) && (FF.rAnio === 'all' || (r.fecha || r.desde.slice(3)).includes(FF.rAnio))
+    && (!q || normQ(r.pac + ' ' + r.ben + ' ' + r.prest + ' ' + r.ops + ' ' + r.nros.join(' ')).includes(q)));
+  T = T.sort((a, b) => b.costo - a.costo || (b.fecha > a.fecha ? 1 : -1));
+  const lim = FF.rTodos ? T.length : 150;
+  return `<div class="kpis">
+      <div class="kpi"><b>${fmtMM(tot)}</b><span>Recuperos de internación (módulo 69) · ${E.length} episodios</span></div>
+      ${resumen.map(x => `<div class="kpi" style="border-color:${CLAS_COL[x.c]}66"><b style="color:${CLAS_COL[x.c]}">${fmtMM(x.monto)}</b><span>${esc(x.c)} · ${x.n} episodios · ${pct(x.monto, tot)}</span></div>`).join('')}
+      <div class="kpi"><b>${fmtMM(labT('5', 'deb') + labT('34', 'deb'))}</b><span>Débito por recuperos de laboratorio (mód. 5 y 34)</span></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>Recuperos por tipo de rechazo</h2><div class="sub">Un episodio = un paciente internado en otro prestador. Si la internación sigue, PAMI emite una OP nueva por mes y se suman al mismo episodio.</div>
+        <table><tr><th>Clasificación</th><th class="num">Episodios</th><th class="num">Meses (OP)</th><th class="num">≥ 3 meses</th><th class="num">Costo total</th><th class="num">Promedio por episodio</th></tr>
+        ${resumen.map(x => `<tr><td><span class="tag" style="background:${CLAS_COL[x.c]}22;color:${CLAS_COL[x.c]}">${esc(x.c)}</span></td><td class="num">${x.n}</td><td class="num">${x.ops}</td><td class="num">${x.prol}</td><td class="num">${fmtN(x.monto)}</td><td class="num">${fmtN(x.monto / Math.max(1, x.n))}</td></tr>`).join('')}
+        <tr class="tot"><td>Total</td><td class="num">${E.length}</td><td class="num">${E.reduce((s, r) => s + r.meses, 0)}</td><td class="num">${E.filter(r => r.meses >= 3).length}</td><td class="num">${fmtN(tot)}</td><td class="num">${fmtN(tot / Math.max(1, E.length))}</td></tr></table>
+        <p class="note">${S.length} rechazos registrados sin OP de recupero en el portal (sin internación en otro prestador, nº de beneficio mal cargado o aún no liquidados). "Sin rechazo conformado" incluye rechazos de oficio a las 48 h y pacientes que se internaron en otro lado sin pasar por la guardia.</p></div>
+      <div class="card"><h2>Prestadores a los que el Lanari les pagó</h2><div class="sub">Top 10 por costo de recupero (todas las clasificaciones)</div>
+        ${topP.map(([k, v]) => `<div class="hrow"><span>${esc(k)}</span><div class="tr"><i style="width:${v.m / mxP * 100}%;background:#c0392b"></i></div><span class="v">${fmtMM(v.m)} · ${v.n}</span></div>`).join('')}</div>
+    </div>
+    <div class="card"><h2>Recuperos mensuales de laboratorio y otros módulos de cápita</h2><div class="sub">Por mes de liquidación. Listado = monto de las OP recuperadas que informa el portal; debitado = lo descontado en la liquidación (puede ser menor por el tope de la cápita).</div>
+      <div class="tw"><table class="esp-m"><tr><th>Mes liq.</th><th class="num">Mód. 5 · OP</th><th class="num">Mód. 5 · listado</th><th class="num">Mód. 5 · debitado</th><th class="num">Mód. 34 · OP</th><th class="num">Mód. 34 · listado</th><th class="num">Mód. 34 · debitado</th><th class="num">Mód. 17/19 · debitado</th><th class="num">Cargo adm. (5 y 34)</th></tr>
+      ${labPers.map(p => `<tr><td class="mono">${p.slice(5)}/${p.slice(0, 4)}</td><td class="num">${fmtN(lab(p, '5', 'ops'))}</td><td class="num">${fmtN(lab(p, '5', 'list'))}</td><td class="num">${fmtN(lab(p, '5', 'deb'))}</td><td class="num">${fmtN(lab(p, '34', 'ops'))}</td><td class="num">${fmtN(lab(p, '34', 'list'))}</td><td class="num">${fmtN(lab(p, '34', 'deb'))}</td><td class="num">${fmtN(lab(p, '17', 'deb') + lab(p, '19', 'deb'))}</td><td class="num">${fmtN(lab(p, '5', 'cargo') + lab(p, '34', 'cargo'))}</td></tr>`).join('')}
+      <tr class="tot"><td>Total</td><td class="num">${fmtN(labT('5', 'ops'))}</td><td class="num">${fmtN(labT('5', 'list'))}</td><td class="num">${fmtN(labT('5', 'deb'))}</td><td class="num">${fmtN(labT('34', 'ops'))}</td><td class="num">${fmtN(labT('34', 'list'))}</td><td class="num">${fmtN(labT('34', 'deb'))}</td><td class="num">${fmtN(labT('17', 'deb') + labT('19', 'deb'))}</td><td class="num">${fmtN(labT('5', 'cargo') + labT('34', 'cargo'))}</td></tr></table></div>
+      <p class="note">Los recuperos de laboratorio y potenciales evocados no provienen de rechazos de guardia: son prácticas de pacientes de la cápita hechas en otros prestadores.</p></div>
+    <div class="card"><h2>Detalle por rechazo y episodio</h2>
+      <div class="rfil" style="margin:6px 0 8px"><b>Clasificación:</b><select id="frClas"><option value="all">Todas</option>${clases.map(c => `<option value="${esc(c)}" ${FF.rClas === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="sinrec" ${FF.rClas === 'sinrec' ? 'selected' : ''}>Rechazos sin recupero</option></select>
+        <b>Año:</b><select id="frAnio"><option value="all">Todos</option>${['2025', '2026'].map(a => `<option ${FF.rAnio === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
+        <input id="frQ" placeholder="Buscar paciente, beneficio, prestador u OP" value="${esc(FF.rQ)}" style="min-width:260px">
+        <span class="note" style="margin:0">${T.length} filas · ${fmtM(T.reduce((s, r) => s + r.costo, 0))}</span></div>
+      <div class="tw"><table class="esp-m"><tr><th>Fecha rechazo</th><th>N°</th><th>Paciente</th><th>Beneficio</th><th>Clasificación</th><th>Motivo</th><th>Prestador que internó</th><th class="num">Meses</th><th>Prestación</th><th class="num">Recupero</th><th class="num">Cargo adm.</th><th class="num">Costo total</th><th>OP</th><th>Nota</th></tr>
+      ${T.slice(0, lim).map(r => `<tr><td class="mono">${r.fecha ? F(new Date(r.fecha + 'T00:00:00')) : '—'}</td><td class="mono">${esc(r.nros.join(', '))}</td><td>${nm(r.pac, r.ben) || '<span class="note" style="margin:0">s/d</span>'}</td><td class="mono">${PRIV ? '···' + esc(r.ben.slice(-4)) : esc(r.ben)}</td>
+        <td><span class="tag" style="background:${(CLAS_COL[r.clas] || '#9aa7a1')}22;color:${CLAS_COL[r.clas] || '#68716d'}">${esc(r.clas)}</span></td><td style="font-size:12px">${esc(r.motivo)}</td><td style="font-size:12px">${esc(r.prest)}</td>
+        <td class="num">${r.meses || '—'}</td><td class="mono" style="font-size:12px">${r.desde ? esc(r.desde) + (r.hasta !== r.desde ? ' → ' + esc(r.hasta) : '') : '—'}</td><td class="num">${r.monto ? fmtN(r.monto) : '—'}</td><td class="num">${r.cargo ? fmtN(r.cargo) : '—'}</td><td class="num"><b>${r.costo ? fmtN(r.costo) : '—'}</b></td>
+        <td class="mono" style="font-size:11px">${esc(r.ops)}</td><td style="font-size:12px;color:var(--muted)">${esc(r.nota)}</td></tr>`).join('')}</table></div>
+      ${T.length > lim ? `<button class="btn" id="frTodos">Mostrar las ${T.length} filas</button>` : ''}
+      <p class="note">Costo = monto de recupero que lista PAMI por OP + cargo administrativo. Cruce por nº de beneficio, módulo 69 y mes del rechazo ±1. Lo descontado en una factura puntual puede ser menor por el tope sobre la factura de cápita; el excedente se descuenta después.</p></div>`;
+}
+function bindFact() {
+  const rt = $('#factRetry'); if (rt) rt.onclick = () => { factError = ''; render(); };
+  document.querySelectorAll('#factSub button').forEach(b => b.onclick = () => { FF.sub = b.dataset.s; render(); });
+  const a = $('#ffAnio'); if (a) a.onchange = () => { FF.anio = a.value; FF.espAbierta = null; render(); };
+  document.querySelectorAll('.ind-t th.sortable').forEach(h => h.onclick = () => { FF.espOrden = h.dataset.ord; render(); });
+  document.querySelectorAll('.ind-t tr.clk').forEach(r => r.onclick = () => { FF.espAbierta = FF.espAbierta === r.dataset.e ? null : r.dataset.e; render(); });
+  const c = $('#frClas'); if (c) c.onchange = () => { FF.rClas = c.value; FF.rTodos = false; render(); };
+  const y = $('#frAnio'); if (y) y.onchange = () => { FF.rAnio = y.value; render(); };
+  const q = $('#frQ'); if (q) { q.onchange = () => { FF.rQ = q.value; render(); }; }
+  const t = $('#frTodos'); if (t) t.onclick = () => { FF.rTodos = true; render(); };
+}
+/* Valor $ de cada rechazo de guardia (para la pestaña Rechazos) */
+function valorRech(r) {
+  if (!FACT) return null;
+  const e = FACT.porNro[r.n]; if (e) return e;
+  return FACT.sinNro[r.n] || null;
 }
 
 /* ---------- Estadísticas (Departamento de Estadística) ---------- */

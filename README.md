@@ -34,6 +34,21 @@ Las fotos de las responsables de cada área no están en el repositorio: el serv
 - Solo lee el **texto del mail**, no los PDF adjuntos.
 - La base histórica (enero a noviembre de 2026) se importó del archivo depurado.
 
+## Facturación PAMI (actualización automática)
+
+Pestaña **Facturación PAMI** (responsable de supervisar los procesos administrativos y la carga de la documentación respaldatoria: Griselda Rios). Tres sub-pestañas:
+
+1. **General**: facturación bruta, débitos y neto 2025–2026 por mes.
+2. **Especialidades**: aporte de cada especialidad (agrupa los módulos; p. ej. Hemodinamia = 208 + 209 + 210), ranking por facturación e indicadores (participación, promedio mensual, variación 2026 vs 2025, demora prestación→liquidación, mes pico).
+3. **Recuperos**: cada rechazo (conformado o de oficio) con su valor en $ según las OP de recupero de PAMI, prestador, meses de internación; y los recuperos mensuales de laboratorio (módulos 5, 34 y 17).
+
+La pestaña **Rechazos** muestra además el $ recuperado por PAMI de cada rechazo de guardia.
+
+Los datos **no están en este repositorio**: viven en la carpeta privada de Drive "Facturación PAMI Lanari (privado)" del dueño del script y se entregan solo con sesión iniciada.
+
+- `actualizarFacturacion()` corre todos los días a las 7:30: importa el archivo `portal_pami_AAAAMM.xlsx` más nuevo de la carpeta (lo deja la verificación mensual del portal PAMI), rearma las facturas desde la planilla "gestion" de Cobranzas y recalcula el cruce rechazo ↔ recupero.
+- Instalación (una vez, después de pegar el Code.gs nuevo): en el editor de Apps Script ejecutar `instalarFacturacion()` y autorizar los permisos; luego **Implementar → Gestionar implementaciones → editar → Versión nueva**.
+
 ## Cómo funciona el acceso
 
 1. La persona ingresa su mail **@lanari.uba.ar**.

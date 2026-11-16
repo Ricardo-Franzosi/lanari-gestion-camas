@@ -19,6 +19,12 @@ const CONFIG = {
   ESTAD_CARPETAS: ['1Y7Q5ZOh1NXoGuuYXa_bHGCmNSQpRxc2S', '1XEHbFk3d0JQHLgMr-wigKKwhSipOugrY', '1IsmuQLEc8Re3LoM30PFHKvvhX0NNNNvR'], // Est. especialidad 2024 / 2025 / 2026
   ESTAD_EXTRA: [{ anio: 2024, id: '1R_xKkRv2sf24LNLkEFC-lG3WiGnC4IIyZVXUhljhHbQ', titulo: 'Estadisticas 2024 (base para panel)' }],
   ESTAD_HORA: 6,
+  // Facturación PAMI: hoja privada "Panel Lanari - datos Facturación PAMI" dentro de la carpeta privada
+  // "Facturación PAMI Lanari (privado)" (Drive del dueño del script). Se entrega solo con sesión iniciada.
+  // Pestañas: FAC_LIQ, FAC_FACT, FAC_MOD, REC_LAB, REC_OPS, LIBRO, REC_RECH, META.
+  FACT_ID: '1MEdhpEyWkMh3Z2tkSP7wCHRMzU94IJ7HIrojWH4wt70',
+  FACT_CARPETA: '1dMFcYv8zxtrMiFOMJeOfZxwLAw8jcBGK',   // donde la verificación mensual deja portal_pami_AAAAMM.xlsx
+  GESTION_ID: '1f7Je4RKCG34MiMRqV2OblMQC2cHstppuF8OMZAnpUVo', // planilla "gestion" de Cobranzas (facturas emitidas)
   // Fotos de las responsables de cada área (archivo privado en el Drive del dueño del script; no está en el repositorio).
   FOTOS_ID: '1bGnNU5jAT4N9v-wDIS5TcxDRhPFVtMxh',
   DOMINIO: 'lanari.uba.ar',
@@ -46,6 +52,7 @@ function doPost(e) {
       case 'data': return json_(datos_(body.token));
       case 'logout': return json_(salir_(body.token));
       case 'estadisticas': return json_(estadisticas_(body.token));
+      case 'facturacion': return json_(facturacion_(body.token));
       default: return json_({ ok: false, error: 'accion_desconocida' });
     }
   } catch (err) {
@@ -160,6 +167,20 @@ function estadisticas_(token) {
   const hojas = {};
   SpreadsheetApp.openById(id).getSheets().forEach(sh => { hojas[sh.getName()] = sh.getDataRange().getDisplayValues(); });
   log_(email, 'estadisticas');
+  return { ok: true, hojas: hojas };
+}
+
+/* ---------- Facturación PAMI (hoja privada) ---------- */
+function facturacion_(token) {
+  const email = sesion_(token);
+  if (!email) return { ok: false, error: 'sesion_vencida' };
+  if (!CONFIG.FACT_ID) return { ok: false, error: 'facturacion_no_configurada' };
+  const tz = Session.getScriptTimeZone();
+  const hojas = {};
+  SpreadsheetApp.openById(CONFIG.FACT_ID).getSheets().forEach(sh => {
+    hojas[sh.getName()] = sh.getDataRange().getValues().map(r => r.map(v => v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v));
+  });
+  log_(email, 'facturacion');
   return { ok: true, hojas: hojas };
 }
 
@@ -294,4 +315,148 @@ function json_(obj) {
 function autorizar() {
   SpreadsheetApp.openById(CONFIG.SHEET_ID).getName();
   MailApp.getRemainingDailyQuota();
+}
+
+/* ---------- Facturación PAMI: actualización automática ----------
+ * Carpeta privada en Drive (CONFIG.FACT_CARPETA) con:
+ *  - la hoja de datos del panel (CONFIG.FACT_ID),
+ *  - los archivos "portal_pami_AAAAMM.xlsx" que deja la verificación mensual del portal PAMI
+ *    (pestañas FAC_LIQ, FAC_MOD, REC_LAB y REC_OPS).
+ * actualizarFacturacion() corre todos los días a las 7:30 (después de la carga de rechazos):
+ *  1. si hay un archivo del portal más nuevo, copia sus pestañas a la hoja de datos;
+ *  2. rearma FAC_FACT con las facturas PAMI de la planilla "gestion" de Cobranzas;
+ *  3. recalcula REC_RECH: valor en $ de cada rechazo de guardia (mails y libro) cruzando con las OP de recupero.
+ */
+function instalarFacturacion() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'actualizarFacturacion').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('actualizarFacturacion').timeBased().everyDays(1).atHour(7).nearMinute(30).create();
+  return actualizarFacturacion();
+}
+
+function actualizarFacturacion() {
+  const tz = Session.getScriptTimeZone();
+  const ss = SpreadsheetApp.openById(CONFIG.FACT_ID);
+  const props = PropertiesService.getScriptProperties();
+  const log = [];
+  // 1) Importar el último archivo del portal
+  if (CONFIG.FACT_CARPETA) {
+    let ult = null;
+    const it = DriveApp.getFolderById(CONFIG.FACT_CARPETA).getFiles();
+    while (it.hasNext()) { const f = it.next(); if (/^portal_pami_\d{6}.*\.xlsx$/i.test(f.getName()) && (!ult || f.getLastUpdated() > ult.getLastUpdated())) ult = f; }
+    const firma = ult ? ult.getId() + '|' + ult.getLastUpdated().getTime() : '';
+    if (ult && props.getProperty('FACT_PORTAL') !== firma) {
+      let tmp = null;
+      try {
+        const r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + ult.getId() + '/copy', { method: 'post', contentType: 'application/json',
+          headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, payload: JSON.stringify({ name: 'tmp portal pami', mimeType: 'application/vnd.google-apps.spreadsheet' }), muteHttpExceptions: true });
+        tmp = JSON.parse(r.getContentText()).id;
+        const src = SpreadsheetApp.openById(tmp);
+        ['FAC_LIQ', 'FAC_MOD', 'REC_LAB', 'REC_OPS'].forEach(n => { const sh = src.getSheetByName(n); if (sh) escribirHoja_(ss, n, sh.getDataRange().getValues()); });
+        props.setProperty('FACT_PORTAL', firma);
+        log.push('portal: ' + ult.getName());
+      } finally { if (tmp) try { DriveApp.getFileById(tmp).setTrashed(true); } catch (e) {} }
+    }
+  }
+  // 2) Facturas PAMI de la planilla "gestion" (Cobranzas)
+  if (CONFIG.GESTION_ID) {
+    try {
+      const prev = {}; const fx = ss.getSheetByName('FAC_FACT');
+      if (fx) fx.getDataRange().getValues().slice(1).forEach(r => { if (r[6] === 'SI') prev[String(r[2])] = true; });
+      const v = SpreadsheetApp.openById(CONFIG.GESTION_ID).getSheets()[0].getDataRange().getValues();
+      const out = [['fecha_envio', 'tipo', 'numero', 'importe', 'fecha_pago', 'debito', 'es_capita_dc']];
+      v.forEach(r => {
+        const os = String(r[1] || '').toUpperCase().replace(/\s/g, '');
+        if (!(/^INS.*JP/.test(os) || /PAMI|UGL/.test(os))) return;
+        const f = r[0] instanceof Date ? r[0] : null; if (!f || f.getFullYear() < 2025) return;
+        const tipo = /^N\.?\s*C|NOTA/i.test(String(r[2]).trim()) ? 'NC' : 'FACTURA';
+        out.push([Utilities.formatDate(f, tz, 'yyyy-MM-dd'), tipo, String(r[3] || ''), typeof r[4] === 'number' ? r[4] : '', r[7] instanceof Date ? Utilities.formatDate(r[7], tz, 'yyyy-MM-dd') : String(r[7] || ''),
+          typeof r[8] === 'number' ? r[8] : '', prev[String(r[3] || '')] ? 'SI' : '']);
+      });
+      escribirHoja_(ss, 'FAC_FACT', out); log.push('facturas: ' + (out.length - 1));
+    } catch (e) { console.warn('gestion: ' + e); log.push('gestion: error ' + e); }
+  }
+  // 3) Valor de cada rechazo
+  const ops = (ss.getSheetByName('REC_OPS') || { getDataRange: () => ({ getValues: () => [[]] }) }).getDataRange().getValues();
+  const libro = ss.getSheetByName('LIBRO') ? ss.getSheetByName('LIBRO').getDataRange().getValues() : [[]];
+  let guardia = [[]];
+  try { guardia = SpreadsheetApp.openById(CONFIG.RECHAZOS_ID).getSheetByName('RECHAZOS').getDataRange().getValues(); } catch (e) { console.warn('rechazos: ' + e); }
+  const fmt = d => d instanceof Date ? Utilities.formatDate(d, tz, 'yyyy-MM-dd') : d;
+  const rech = construirRecRech_(ops.map(r => r.map(fmt)), guardia.map(r => r.map(fmt)), libro.map(r => r.map(fmt)));
+  escribirHoja_(ss, 'REC_RECH', rech); log.push('rechazos/episodios: ' + (rech.length - 1));
+  escribirHoja_(ss, 'META', [['clave', 'valor'], ['generado', Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm')],
+    ['fuente_portal', 'efectores.pami.org.ar' + (props.getProperty('FACT_PORTAL') ? ' · ' + DriveApp.getFileById(props.getProperty('FACT_PORTAL').split('|')[0]).getName() : '')],
+    ['fuente_facturas', 'Planilla "gestion" (Cobranzas)'], ['responsable', 'Griselda Rios']]);
+  console.log(log.join(' · '));
+  return log;
+}
+
+function escribirHoja_(ss, nombre, vals) {
+  let sh = ss.getSheetByName(nombre); if (!sh) sh = ss.insertSheet(nombre);
+  sh.clearContents();
+  if (!vals.length) return;
+  const w = Math.max(...vals.map(r => r.length));
+  sh.getRange(1, 1, vals.length, w).setValues(vals.map(r => r.concat(Array(w - r.length).fill(''))));
+}
+
+/** Cruce rechazos ↔ OP de recupero (módulo 69). Función pura: recibe y devuelve matrices de valores. */
+function construirRecRech_(opsV, guardiaV, libroV) {
+  const z = s => String(s == null ? '' : s).replace(/^0+/, '');
+  const ymI = p => +p.slice(0, 4) * 12 + +p.slice(5, 7);
+  const perTxt = p => p.slice(5, 7) + '/' + p.slice(0, 4);
+  const num = v => typeof v === 'number' ? v : Number(String(v || '0').replace(',', '.')) || 0;
+  const ed1 = (a, b) => { if (a === b) return true; if (Math.abs(a.length - b.length) > 1) return false; let i = 0, j = 0, d = 0;
+    while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++d > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } }
+    return d + (a.length - i) + (b.length - j) <= 1; };
+  const H = opsV[0] || []; const ix = k => H.indexOf(k);
+  const ops = opsV.slice(1).filter(r => r[0] !== '' && r[0] != null).map(r => ({ op: String(r[ix('op')]), ben: z(r[ix('beneficio')]), per: String(r[ix('periodo_prest')]).slice(0, 7), prest: String(r[ix('prestador')]),
+    mt: num(r[ix('monto_recupero')]), cg: num(r[ix('cargo_adm')]), lq: String(r[ix('liquidaciones')] || ''), pazNom: String(r[ix('paciente_planilla_paez')] || ''), pazNota: String(r[ix('nota_planilla_paez')] || '') }));
+  const maxPer = ops.map(o => o.per).sort().pop() || '';
+  const byB = {}; ops.forEach(o => (byB[o.ben] = byB[o.ben] || []).push(o)); const keys = Object.keys(byB);
+  const buscar = (nb, ym) => { // OP del beneficiario en el mes del rechazo ±1
+    if (!nb) return []; let c = byB[nb];
+    if (!c) { const ks = keys.filter(k => ed1(k, nb)); if (ks.length === 1) c = byB[ks[0]]; }
+    if (!c || !ym) return []; const m = ymI(ym); return c.filter(o => Math.abs(ymI(o.per) - m) <= 1);
+  };
+  // Hoja de rechazos de guardia
+  const hi = guardiaV.findIndex(r => r.some(v => /categor[ií]a de motivo/i.test(String(v))));
+  const gh = hi >= 0 ? guardiaV[hi].map(String) : []; const gc = re => gh.findIndex(h => re.test(h));
+  const G = hi < 0 ? [] : guardiaV.slice(hi + 1).filter(r => r[gc(/^N°/)] !== '' && r[gc(/^N°/)] != null).map(r => {
+    let f = String(r[gc(/^Fecha/i)] || ''); const m = f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) f = m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    const bRaw = String(r[gc(/benef/i)] || '').replace(/[^0-9/]/g, '');
+    const nb = bRaw.includes('/') ? bRaw.split('/')[0] : (bRaw.length >= 13 ? bRaw.slice(0, -2) : bRaw);
+    return { n: String(r[gc(/^N°/)]), fecha: f.slice(0, 10), pac: String(r[gc(/^Paciente/i)] || ''), ben: z(nb), motivo: String(r[gc(/^Motivo del/i)] || ''), estado: String(r[gc(/^Estado/i)] || ''), vig: /^vigente$/i.test(String(r[gc(/^Estado/i)] || '').trim()) };
+  });
+  const LBh = (libroV[0] || []).map(String); const lc = k => LBh.indexOf(k);
+  const LB = libroV.slice(1).filter(r => r[lc('mes')]).map(r => ({ fecha: String(r[lc('fecha')]).slice(0, 10), mes: String(r[lc('mes')]).slice(0, 7), pac: String(r[lc('paciente')] || ''),
+    ben: z(String(r[lc('beneficio')] || '').replace(/[^0-9/]/g, '').split('/')[0]), motivo: String(r[lc('motivo')] || '') }));
+  // OP → rechazos que la explican
+  const gOp = {}, lOp = {};
+  G.forEach((g, i) => buscar(g.ben, g.fecha.slice(0, 7)).forEach(o => (gOp[o.op] = gOp[o.op] || []).push(i)));
+  LB.forEach((l, i) => buscar(l.ben, l.mes).forEach(o => (lOp[o.op] = lOp[o.op] || []).push(i)));
+  // Episodios: mismo beneficiario y prestador en meses consecutivos (PAMI emite una OP por mes de internación)
+  const grupos = {}; ops.forEach(o => (grupos[o.ben + '|' + o.prest] = grupos[o.ben + '|' + o.prest] || []).push(o));
+  const epis = [];
+  Object.values(grupos).forEach(lst => { lst.sort((a, b) => ymI(a.per) - ymI(b.per)); let cur = [lst[0]];
+    lst.slice(1).forEach(o => { if (ymI(o.per) - ymI(cur[cur.length - 1].per) <= 1) cur.push(o); else { epis.push(cur); cur = [o]; } }); epis.push(cur); });
+  const out = [['tipo_fila', 'clasificacion', 'n_rechazo_guardia', 'fecha_rechazo', 'paciente', 'beneficio', 'motivo', 'prestador_que_interno', 'meses_internado', 'prestacion_desde', 'prestacion_hasta', 'op_inicial', 'ops', 'monto_recupero', 'cargo_adm', 'costo_total', 'liquidaciones', 'nota']];
+  const usedG = new Set(), usedL = new Set();
+  epis.forEach(e => {
+    const ngs = [...new Set(e.flatMap(o => (gOp[o.op] || []).filter(i => G[i].vig)))].sort((a, b) => a - b);
+    const nls = [...new Set(e.flatMap(o => lOp[o.op] || []))].sort((a, b) => a - b);
+    ngs.forEach(i => usedG.add(i)); nls.forEach(i => usedL.add(i));
+    const clas = ngs.length ? 'Rechazo conformado (guardia 2026)' : nls.length ? 'Rechazo registrado en libro de guardia' : 'Sin rechazo conformado (de oficio u otro)';
+    let r0 = null; for (const o of e) { const g = (gOp[o.op] || []).filter(i => G[i].vig); if (g.length) { r0 = G[Math.min(...g)]; break; } const l = lOp[o.op] || []; if (l.length) { r0 = LB[Math.min(...l)]; break; } }
+    const mt = e.reduce((s, o) => s + o.mt, 0), cg = e.reduce((s, o) => s + o.cg, 0);
+    const nota = [];
+    if (!r0 && mt < 70000) nota.push('Monto menor (< $70.000)');
+    if (!r0 && /^no se envio/i.test(e[0].pazNota)) nota.push('Planilla C. Páez: no se envió rechazo desde el Instituto');
+    out.push(['Con recupero', clas, ngs.map(i => G[i].n).join(', '), r0 ? r0.fecha : '', r0 ? r0.pac : e[0].pazNom, e[0].ben, r0 ? r0.motivo : '', e[0].prest, e.length, perTxt(e[0].per), perTxt(e[e.length - 1].per),
+      e[0].op, e.map(o => o.op).join(' '), Math.round(mt * 100) / 100, Math.round(cg * 100) / 100, Math.round((mt + cg) * 100) / 100, e.map(o => o.lq).join(' '), nota.join('; ')]);
+  });
+  G.forEach((g, i) => { if (usedG.has(i)) return;
+    const nota = maxPer && g.fecha.slice(0, 7) > maxPer ? 'Aún no liquidable (portal hasta prestación ' + perTxt(maxPer) + ')' : !g.ben ? 'Sin nº de beneficio' : 'Sin OP de recupero en el portal';
+    out.push(['Sin recupero', 'Rechazo guardia 2026 (' + g.estado + ')', g.n, g.fecha, g.pac, g.ben, g.motivo, '', 0, '', '', '', '', 0, 0, 0, '', nota]); });
+  LB.forEach((l, i) => { if (usedL.has(i) || l.mes >= '2026') return;
+    out.push(['Sin recupero', 'Rechazo libro de guardia 2025', '', l.fecha, l.pac, l.ben, l.motivo, '', 0, '', '', '', '', 0, 0, 0, '', 'Sin OP de recupero en el portal']); });
+  return out;
 }
