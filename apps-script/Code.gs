@@ -26,7 +26,7 @@ const CONFIG = {
   FACT_CARPETA: '1dMFcYv8zxtrMiFOMJeOfZxwLAw8jcBGK',   // donde la verificación mensual deja portal_pami_AAAAMM.xlsx
   GESTION_ID: '1f7Je4RKCG34MiMRqV2OblMQC2cHstppuF8OMZAnpUVo', // planilla "gestion" de Cobranzas (facturas emitidas)
   // Fotos de las responsables de cada área (archivo privado en el Drive del dueño del script; no está en el repositorio).
-  FOTOS_ID: '1bGnNU5jAT4N9v-wDIS5TcxDRhPFVtMxh',
+  FOTOS_ID: '14SQrQ2t8oH2mW_ZMnAkJjiUE0WSJZyHV',
   DOMINIO: 'lanari.uba.ar',
   HOJA_ACCESO: 'ACCESO',          // opcional: lista blanca de mails en la columna A
   HOJA_LOG: 'LOG ACCESOS',        // opcional: si existe, se registran ingresos y consultas
@@ -147,9 +147,9 @@ function datos_(token) {
 
 function fotos_() {
   if (!CONFIG.FOTOS_ID) return {};
-  const c = CacheService.getScriptCache(); const h = c.get('fotos');
+  const c = CacheService.getScriptCache(), k = 'fotos_' + CONFIG.FOTOS_ID; const h = c.get(k); // la clave cambia si cambia el archivo
   if (h) return JSON.parse(h);
-  try { const t = DriveApp.getFileById(CONFIG.FOTOS_ID).getBlob().getDataAsString(); c.put('fotos', t, 21600); return JSON.parse(t); }
+  try { const t = DriveApp.getFileById(CONFIG.FOTOS_ID).getBlob().getDataAsString(); c.put(k, t, 21600); return JSON.parse(t); }
   catch (e) { console.warn('Fotos: ' + e); return {}; }
 }
 
