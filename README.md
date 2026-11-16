@@ -49,6 +49,10 @@ Los datos **no están en este repositorio**: viven en la carpeta privada de Driv
 - `actualizarFacturacion()` corre todos los días a las 7:30: importa el archivo `portal_pami_AAAAMM.xlsx` más nuevo de la carpeta (lo deja la verificación mensual del portal PAMI), rearma las facturas desde la planilla "gestion" de Cobranzas y recalcula el cruce rechazo ↔ recupero.
 - Instalación (una vez, después de pegar el Code.gs nuevo): en el editor de Apps Script ejecutar `instalarFacturacion()` y autorizar los permisos; luego **Implementar → Gestionar implementaciones → editar → Versión nueva**.
 
+## Facturación a obras sociales
+
+Pestaña **Facturación OS** (responsable del área de Facturación y Presupuestos: Silvana Marano). Desde 01/2025, por obra social: facturado, debitado, cobrado (saldo de las facturas con fecha de pago), deuda (saldo de las facturas sin fecha de pago), antigüedad de la deuda, plazo promedio de cobro y notas de crédito. Fuente: planilla "gestion" de Facturación/Cobranzas; el script la copia cada día a la pestaña privada FAC_OS (dentro de `actualizarFacturacion()`). Las variantes de nombre de una misma obra social se agrupan en el panel por palabras clave (`OS_REGLAS` en index.html).
+
 ## Cómo funciona el acceso
 
 1. La persona ingresa su mail **@lanari.uba.ar**.

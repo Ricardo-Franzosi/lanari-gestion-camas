@@ -374,6 +374,16 @@ function actualizarFacturacion() {
           typeof r[8] === 'number' ? r[8] : '', prev[String(r[3] || '')] ? 'SI' : '']);
       });
       escribirHoja_(ss, 'FAC_FACT', out); log.push('facturas: ' + (out.length - 1));
+      // Todas las obras sociales desde 2025 (pestaña Facturación OS). Se copian tal cual; el panel agrupa las variantes de nombre.
+      const os = [['fecha_envio', 'obra_social', 'tipo', 'numero', 'importe', 'forma_envio', 'fecha_recibido', 'fecha_pago', 'debito', 'saldo']];
+      const fd = x => x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : String(x == null ? '' : x).trim();
+      v.forEach(r => {
+        const f = r[0] instanceof Date ? r[0] : null; if (!f || f.getFullYear() < 2025 || !String(r[1] || '').trim()) return;
+        const tipo = /^N\s*[\/.]?\s*C|NOTA/i.test(String(r[2]).trim()) ? 'NC' : 'FACTURA';
+        os.push([fd(f), String(r[1]).trim(), tipo, String(r[3] || ''), typeof r[4] === 'number' ? r[4] : '', String(r[5] || '').trim(), fd(r[6]), fd(r[7]),
+          typeof r[8] === 'number' ? r[8] : '', typeof r[9] === 'number' ? r[9] : '']);
+      });
+      escribirHoja_(ss, 'FAC_OS', os); log.push('comprobantes OS: ' + (os.length - 1));
     } catch (e) { console.warn('gestion: ' + e); log.push('gestion: error ' + e); }
   }
   // 3) Valor de cada rechazo

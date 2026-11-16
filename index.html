@@ -166,6 +166,8 @@ button.lnk,a.lnk{background:none;border:0;color:#0f5e6e;font:inherit;font-size:1
 .ind-t th.sortable{cursor:pointer;white-space:nowrap}.ind-t td:first-child{min-width:170px}.ind-t th,.ind-t td{padding-left:8px;padding-right:8px}.ind-t th.sortable.on{color:#0f5e6e}
 .ind-t tr.clk{cursor:pointer}.ind-t tr.clk:hover td{background:#f4f8f6}.ind-t tr.sel td{background:#e8f3f5}
 .ind-t tr.det td{background:#fbfcfb;padding:12px}
+.muted{color:var(--muted)}.osdet{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:18px}.osdet h3{font-size:13px;margin:0 0 6px}.osdet ul{margin:0;padding-left:18px;font-size:12.5px}.ind-t th.sortable{cursor:pointer}.ind-t th.sortable.on{color:var(--ink,#123)}
+@media (max-width:760px){.osdet{grid-template-columns:1fr}}
 .ind-det{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
 .ind-src{font-size:12.5px}.ind-src p{margin:6px 0;color:var(--muted)}
 .leg{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:4px}.leg i{display:inline-block;width:12px;height:3px;margin-right:5px;vertical-align:middle}
@@ -214,6 +216,7 @@ label.btn{display:inline-block}
     <a href="#rechazos">Rechazos guardia</a>
     <a href="#estadisticas">Estadísticas</a>
     <a href="#facturacion">Facturación PAMI</a>
+    <a href="#obrassociales">Facturación OS</a>
   </nav>
 </header>
 <div class="ddmenu" id="ddGestion" hidden></div>
@@ -995,7 +998,7 @@ $('#fileIn').onchange = async ev => {
 $('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari_priv', PRIV ? '1' : '0'); } catch (e) {} render(); };
 
 /* ---------- Render ---------- */
-const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas', 'facturacion'];
+const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas', 'facturacion', 'obrassociales'];
 const GESTION = [['solicitud', 'Solicitud de internación'], ['movimientos', 'Movimientos y agenda'], ['espera', 'Espera y suspensiones'], ['indicadores', 'Indicadores']];
 let ULT_GESTION = 'solicitud', FOTOS = {};
 /* Responsables de cada área (las fotos llegan del servidor sólo con sesión iniciada) */
@@ -1003,6 +1006,7 @@ const AREAS = {
   gestion: { foto: 'paula', ini: 'PA', titulo: 'Sector de Gestión de Camas', texto: 'Responsable: <b>Paula Appugliese</b>. Los datos de camas, movimientos, espera y suspensiones provienen de la planilla que suministra su área.' },
   guardia: { foto: 'lorena', ini: 'LI', titulo: 'Guardia · Administración', texto: 'Responsable: <b>Lorena Iriarte</b>. Los rechazos provienen de los datos que informan los administrativos de guardia por mail.' },
   fact: { foto: 'griselda', ini: 'GR', titulo: 'Facturación PAMI · Administración', texto: 'Responsable de supervisar los procesos administrativos y la carga de la documentación respaldatoria: <b>Griselda Rios</b>.' },
+  os: { foto: 'silvana', ini: 'SM', titulo: 'Facturación y Presupuestos · Obras sociales', texto: 'Responsable del área de Facturación y Presupuestos: <b>Silvana Marano</b>.' },
   estad: { foto: 'corina', ini: 'CP', titulo: 'Departamento de Estadística · Instituto Lanari', texto: 'Información recopilada por <b>Corina Páez</b>, a partir de los registros mensuales de cada servicio.' }
 };
 function areaCard(k, meta, compacta) {
@@ -1031,11 +1035,12 @@ function render() {
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.grupo === 'gestion' ? GESTION.some(g => g[0] === v) : a.getAttribute('href') === '#' + v));
   $('#navGestion').setAttribute('href', '#' + ULT_GESTION);
   if (!DATA) return;
-  const vista = ({ mapa: () => areaCard('gestion', '', true) + vMapa(), movimientos: vMov, espera: vEspera, indicadores: vInd, solicitud: vSolicitud, rechazos: vRech, estadisticas: vEst, facturacion: vFact })[v]();
+  const vista = ({ mapa: () => areaCard('gestion', '', true) + vMapa(), movimientos: vMov, espera: vEspera, indicadores: vInd, solicitud: vSolicitud, rechazos: vRech, estadisticas: vEst, facturacion: vFact, obrassociales: vOS })[v]();
   $('#main').innerHTML = GESTION.some(g => g[0] === v) ? cabGestion(v) + vista : vista;
   if (v === 'rechazos') bindRech();
   if (v === 'estadisticas') bindEst();
   if (v === 'facturacion') bindFact();
+  if (v === 'obrassociales') bindOS();
   bindTips();
 }
 const cls = s => String(s).replace(/\s+/g, '_');
@@ -1340,7 +1345,7 @@ function parseFact(h) {
   // Valor por N° de rechazo de guardia (el episodio puede reunir varios rechazos del mismo paciente)
   const porNro = {}; rech.filter(r => r.tipo === 'Con recupero').forEach(r => r.nros.forEach(n => porNro[n] = r));
   const sinNro = {}; rech.filter(r => r.tipo === 'Sin recupero').forEach(r => r.nros.forEach(n => sinNro[n] = r));
-  return { liq, fac, mod, lab, rech, meta, porNro, sinNro };
+  return { liq, fac, mod, lab, rech, meta, porNro, sinNro, os: parseOS(h) };
 }
 async function cargarFact() {
   if (factCargando || FACT || !API || !SES) return;
@@ -1353,7 +1358,7 @@ async function cargarFact() {
         r.error === 'facturacion_no_configurada' ? 'Falta configurar la hoja de facturación en el script.' : (ERR[r.error] || r.error);
     } else FACT = parseFact(r.hojas || {});
   } catch (e) { factError = e.message; }
-  finally { factCargando = false; if (['facturacion', 'rechazos'].includes(view())) render(); }
+  finally { factCargando = false; if (['facturacion', 'rechazos', 'obrassociales'].includes(view())) render(); }
 }
 const anioOk = (per, a) => a === 'all' || String(per).slice(0, 4) === String(a);
 function vFact() {
@@ -1510,6 +1515,147 @@ function bindFact() {
   const q = $('#frQ'); if (q) { q.onchange = () => { FF.rQ = q.value; render(); }; }
   const t = $('#frTodos'); if (t) t.onclick = () => { FF.rTodos = true; render(); };
 }
+/* ---------- Facturación a obras sociales (planilla "gestion" de Cobranzas) ---------- */
+// Agrupación de variantes de nombre (la planilla escribe la misma obra social de varias formas).
+// Automática por palabras clave: el detalle de cada obra social muestra los nombres originales agrupados.
+const OS_REGLAS = [
+  [/\bINSS?P?J?P\b|INSSJP|INSSPJP|\bPAMI\b/, 'PAMI (INSSJP)'],
+  [/DOSUBA/, 'DOSUBA'],
+  [/MOLINERA/, 'O.S. Personal Industria Molinera'],
+  [/MAESTRANZA/, 'O.S. Personal de Maestranza'],
+  [/TELECOM|OSPETELCO/, 'O.S. Personal de Telecomunicaciones'],
+  [/VITIV|\bVITI\b|\bVIT\b/, 'O.S. Personal de Dirección Ind. Vitivinícola'],
+  [/ESCRIBAN/, 'O.S. Personal de Escribanos'],
+  [/COMISARIOS NAVALES/, 'O.S. Comisarios Navales'],
+  [/PASTELER/, 'O.S. Pasteleros'],
+  [/GRAFIC/, 'O.S. Personal Gráfico'],
+  [/SANIDAD/, 'O.S. Personal de Sanidad'],
+  [/RENTA|OSPERYH/, 'O.S. Personal Edificios de Renta y Horizontal'],
+  [/PROPAGANDA MEDICA/, 'O.S. Propaganda Médica'],
+  [/ACEROS PARANA/, 'O.S. Aceros Paraná'],
+  [/PETROLEROS/, 'O.S. Petroleros'],
+  [/ENSENANZA PRIVADA/, 'O.S. Personal Enseñanza Privada'],
+  [/SERVICIOS SOCIALES BANCARIOS/, 'O.S. Servicios Sociales Bancarios'],
+  [/UNION PERSONAL|UNION DEL PER/, 'Unión Personal'],
+  [/PODER JUDICIAL/, 'O.S. Poder Judicial de la Nación'],
+  [/SYNEOS/, 'Syneos Health'],
+  [/SWISS MEDICAL/, 'Swiss Medical'],
+  [/GALENO/, 'Galeno'],
+  [/OXAPHARMA/, 'Oxapharma'],
+  [/RICHMOND/, 'Laboratorio Richmond'],
+  [/CELTYC/, 'Laboratorio Celtyc'],
+  [/TRIQUIM/, 'Laboratorio Triquim'],
+  [/CASAS PARTICULARES/, 'O.S. Personal de Casas Particulares'],
+  [/TECHINT/, 'Asoc. Personal Superior Techint'],
+  [/OSTPCH/, 'OSTPCHPYARA'],
+  [/DEPORTIVAS Y CIVILES|OSPEDYC/, 'OSPEDYC'],
+  [/O?S?EDEIV/, 'OSEDEIV'],
+  [/OSUTH?GRA/, 'OSUTHGRA'],
+  [/GASTRONOM/, 'O.S. Gastronómicos'],
+  [/MEDICUS/, 'Medicus'],
+  [/CUCAIBA/, 'CUCAIBA']
+];
+const osNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[.,()]/g, ' ').replace(/\s+/g, ' ').trim();
+function osCanon(raw) { const n = osNorm(raw); for (const [re, c] of OS_REGLAS) if (re.test(n)) return c; return String(raw || '').trim().replace(/\s+/g, ' '); }
+const esPami = c => c === 'PAMI (INSSJP)';
+const isoOk = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
+const diasEntre = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
+let OF = { anio: 'all', sinPami: false, abierta: null, orden: 'facturado' };
+function parseOS(h) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  return tablaObj(h.FAC_OS).map(r => {
+    const fecha = String(r.fecha_envio || '').slice(0, 10), pago = String(r.fecha_pago || '').trim();
+    const imp = numF(r.importe), deb = numF(r.debito), saldo = r.saldo === '' || r.saldo == null ? imp - deb : numF(r.saldo);
+    const pagoOk = isoOk(pago) && pago >= fecha && pago <= hoy;
+    return { fecha, raw: String(r.obra_social || ''), os: osCanon(r.obra_social), tipo: r.tipo === 'NC' ? 'NC' : 'FACTURA', num: String(r.numero || ''), imp, deb, saldo,
+      forma: String(r.forma_envio || ''), pago, pagada: pago !== '', pagoOk, dias: pagoOk ? diasEntre(fecha, pago) : null,
+      fechaRara: !isoOk(fecha) || fecha > hoy, edad: isoOk(fecha) && fecha <= hoy ? diasEntre(fecha, hoy) : null };
+  }).filter(c => c.fecha);
+}
+function aggOS(C) {
+  const by = {};
+  C.forEach(c => {
+    const o = by[c.os] = by[c.os] || { os: c.os, nF: 0, facturado: 0, nNC: 0, nc: 0, debitado: 0, factPagado: 0, cobrado: 0, deuda: 0, nImp: 0, maxEdad: 0, dS: 0, dN: 0, nombres: {}, impagas: [] };
+    o.nombres[c.raw.trim()] = (o.nombres[c.raw.trim()] || 0) + 1;
+    if (c.tipo === 'NC') { o.nNC++; o.nc += c.imp; return; }
+    o.nF++; o.facturado += c.imp;
+    if (c.pagada) { o.cobrado += c.saldo; o.debitado += c.deb; o.factPagado += c.imp; if (c.dias != null) { o.dS += c.dias; o.dN++; } }
+    else { o.deuda += c.saldo; o.nImp++; o.impagas.push(c); if (c.edad != null) o.maxEdad = Math.max(o.maxEdad, c.edad); }
+  });
+  return Object.values(by).map(o => ({ ...o, pDeb: o.factPagado ? o.debitado / o.factPagado : null, diasCobro: o.dN ? o.dS / o.dN : null }));
+}
+const TRAMOS = [[0, 30, '0–30 días'], [31, 60, '31–60'], [61, 90, '61–90'], [91, 180, '91–180'], [181, 365, '181–365'], [366, 1e9, 'Más de 1 año']];
+function vOS() {
+  const head = areaCard('os', FACT ? `Fuente: planilla "gestion" de Facturación/Cobranzas<br>Comprobantes desde 01/2025` : '');
+  if (!FACT) {
+    if (API && SES && !factError) { setTimeout(cargarFact, 0); return head + `<div class="state"><h2>Cargando facturación…</h2><p>Leyendo la hoja privada de facturación.</p></div>`; }
+    return head + `<div class="state"><h2>Sin datos de facturación</h2><p>${esc(factError || 'La facturación se ve solo con sesión iniciada en el panel.')}</p>${API && SES ? '<div><button class="btn pri" id="factRetry">Reintentar</button></div>' : ''}</div>`;
+  }
+  if (!FACT.os || !FACT.os.length) return head + `<div class="state"><h2>Todavía no hay datos de obras sociales</h2><p>La hoja privada no tiene la pestaña FAC_OS. Se genera con la actualización diaria del script (7:30).</p></div>`;
+  const todos = FACT.os, anios = [...new Set(todos.filter(c => !c.fechaRara).map(c => c.fecha.slice(0, 4)))].sort();
+  const C = todos.filter(c => !c.fechaRara && (OF.anio === 'all' || c.fecha.startsWith(OF.anio)) && !(OF.sinPami && esPami(c.os)));
+  const A = aggOS(C);
+  const T = A.reduce((t, o) => { ['nF', 'facturado', 'nNC', 'nc', 'debitado', 'factPagado', 'cobrado', 'deuda', 'nImp', 'dS', 'dN'].forEach(k => t[k] = (t[k] || 0) + o[k]); return t; }, {});
+  const ord = { facturado: (a, b) => b.facturado - a.facturado, deuda: (a, b) => b.deuda - a.deuda, debitado: (a, b) => b.debitado - a.debitado, pDeb: (a, b) => (b.pDeb ?? -1) - (a.pDeb ?? -1), dias: (a, b) => (b.diasCobro ?? -1) - (a.diasCobro ?? -1), edad: (a, b) => b.maxEdad - a.maxEdad }[OF.orden];
+  A.sort(ord);
+  // Serie mensual por mes de envío
+  const ys = OF.anio === 'all' ? anios : [OF.anio];
+  const serie = (y, f) => Array.from({ length: 12 }, (_, i) => { const m = `${y}-${String(i + 1).padStart(2, '0')}`; const x = C.filter(c => c.tipo === 'FACTURA' && c.fecha.startsWith(m)); return x.length ? f(x) / 1e6 : null; });
+  const colY = { 2025: '#9aa7a1', 2026: '#0f5e6e' };
+  // Antigüedad de la deuda
+  const imp = C.filter(c => c.tipo === 'FACTURA' && !c.pagada);
+  const tr = TRAMOS.map(([a, b, l]) => { const x = imp.filter(c => c.edad != null && c.edad >= a && c.edad <= b); return { l, n: x.length, m: x.reduce((s, c) => s + c.saldo, 0) }; });
+  const trMx = Math.max(1, ...tr.map(t => t.m));
+  const rar = todos.filter(c => c.fechaRara).length, pagoRaro = todos.filter(c => c.pagada && !c.pagoOk).length;
+  const nVar = A.filter(o => Object.keys(o.nombres).length > 1).length;
+  const sinPagos = A.filter(o => o.nF >= 5 && o.nImp === o.nF);
+  const th = (k, l) => `<th class="num sortable${OF.orden === k ? ' on' : ''}" data-ord="${k}">${l}${OF.orden === k ? ' ▾' : ''}</th>`;
+  const fila = o => {
+    const ab = OF.abierta === o.os;
+    return `<tr class="clk${ab ? ' open' : ''}" data-o="${esc(o.os)}"><td><b>${esc(o.os)}</b>${Object.keys(o.nombres).length > 1 ? ` <span class="muted">(${Object.keys(o.nombres).length} nombres)</span>` : ''}</td>
+      <td class="num">${o.nF}</td><td class="num">${fmtN(o.facturado)}</td><td class="num" style="color:#c0392b">${o.debitado ? fmtN(o.debitado) : '—'}</td><td class="num">${o.pDeb == null ? '—' : (o.pDeb * 100).toFixed(1) + '%'}</td>
+      <td class="num"><b>${fmtN(o.cobrado)}</b></td><td class="num" style="${o.deuda > 0 ? 'color:#b35c00;font-weight:600' : ''}">${o.deuda ? fmtN(o.deuda) : '—'}</td><td class="num">${o.nImp || '—'}</td>
+      <td class="num">${o.nImp ? o.maxEdad : '—'}</td><td class="num">${o.diasCobro == null ? '—' : Math.round(o.diasCobro)}</td><td class="num">${o.nNC ? fmtN(o.nc) : '—'}</td></tr>` +
+      (ab ? `<tr class="det"><td colspan="11"><div class="osdet">
+        <div><h3>Nombres en la planilla</h3><ul>${Object.entries(o.nombres).sort((a, b) => b[1] - a[1]).map(([n, k]) => `<li>${esc(n)} <span class="muted">· ${k}</span></li>`).join('')}</ul></div>
+        <div><h3>Facturas pendientes de cobro (${o.impagas.length})</h3>${o.impagas.length ? `<div class="tw" style="max-height:260px"><table><tr><th>Envío</th><th>Número</th><th class="num">Importe</th><th class="num">Días</th><th>Forma de envío</th></tr>${o.impagas.sort((a, b) => (b.edad || 0) - (a.edad || 0)).map(c => `<tr><td class="mono">${c.fecha.split('-').reverse().join('/')}</td><td class="mono">${esc(c.num)}</td><td class="num">${fmtN(c.saldo)}</td><td class="num">${c.edad ?? '—'}</td><td>${esc(c.forma)}</td></tr>`).join('')}</table></div>` : '<p class="muted">Sin facturas pendientes.</p>'}</div>
+      </div></td></tr>` : '');
+  };
+  return head + `<div class="rfil" style="display:flex;gap:18px;align-items:center;margin-bottom:12px"><span><b>Año de envío:</b> <select id="ofAnio"><option value="all">2025 y 2026</option>${anios.map(a => `<option ${OF.anio === a ? 'selected' : ''}>${a}</option>`).join('')}</select></span>
+      <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="ofSinPami" ${OF.sinPami ? 'checked' : ''}> Excluir PAMI</label></div>
+    <div class="kpis">
+      <div class="kpi"><b>${fmtMM(T.facturado)}</b><span>Facturado (${T.nF} facturas · ${A.length} financiadores)</span></div>
+      <div class="kpi" style="border-color:#e8b4ad"><b style="color:#c0392b">${fmtMM(T.debitado)}</b><span>Debitado · ${pct(T.debitado, T.factPagado)} de lo facturado ya pagado</span></div>
+      <div class="kpi"><b>${fmtMM(T.cobrado)}</b><span>Cobrado (neto de débitos)</span></div>
+      <div class="kpi" style="border-color:#f0c48a"><b style="color:#b35c00">${fmtMM(T.deuda)}</b><span>Deuda: ${T.nImp} facturas sin fecha de pago</span></div>
+      <div class="kpi"><b>${T.dN ? Math.round(T.dS / T.dN) : '—'} días</b><span>Plazo promedio de cobro (envío → pago)</span></div>
+      <div class="kpi"><b>${fmtMM(T.nc)}</b><span>Notas de crédito emitidas (${T.nNC})</span></div>
+    </div>
+    ${sinPagos.length ? `<div class="card" style="border-left:4px solid #d98a2b"><b>A revisar con Cobranzas:</b> ${sinPagos.map(o => `<b>${esc(o.os)}</b> (${o.nF} facturas, ${fmtMM(o.deuda)})`).join(', ')} no ${sinPagos.length > 1 ? 'tienen' : 'tiene'} ninguna fecha de pago registrada en la planilla. Esa deuda puede ser real o deberse a que los pagos no se cargan; sin la fecha de pago no se puede distinguir.</div>` : ''}
+    <div class="grid2">
+      <div class="card"><h2>Facturado por mes de envío</h2><div class="sub">En millones de pesos${OF.sinPami ? ', sin PAMI' : ''}</div>
+        ${lineChart(ys.map(y => ({ name: y, vals: serie(y, x => x.reduce((s, c) => s + c.imp, 0)), color: colY[y] || '#0f5e6e', w: 2.4 })), { H: 210 })}
+        <div class="leg">${ys.map(y => `<span><i style="background:${colY[y] || '#0f5e6e'}"></i>${y}</span>`).join('')}</div></div>
+      <div class="card"><h2>Antigüedad de la deuda</h2><div class="sub">Facturas sin fecha de pago, por días desde el envío</div>
+        <table>${tr.map(t => `<tr><td style="width:110px">${t.l}</td><td><div class="hbar"><i style="width:${t.m / trMx * 100}%;background:#d98a2b"></i></div></td><td class="num">${fmtN(t.m)}</td><td class="num muted">${t.n} fact.</td></tr>`).join('')}
+        <tr class="tot"><td>Total</td><td></td><td class="num">${fmtN(T.deuda)}</td><td class="num">${T.nImp}</td></tr></table></div>
+    </div>
+    <div class="card"><h2>Por obra social</h2><div class="sub">Tocá una fila para ver los nombres agrupados y las facturas pendientes. Encabezados ordenables.</div>
+      <div class="tw"><table class="ind-t os-t"><tr><th>Obra social / financiador</th><th class="num">Facturas</th>${th('facturado', 'Facturado')}${th('debitado', 'Debitado')}${th('pDeb', '% débito')}<th class="num">Cobrado</th>${th('deuda', 'Deuda')}<th class="num">Fact. impagas</th>${th('edad', 'Deuda más antigua (días)')}${th('dias', 'Días prom. cobro')}<th class="num">Notas de crédito</th></tr>
+      ${A.map(fila).join('')}
+      <tr class="tot"><td>Total</td><td class="num">${T.nF}</td><td class="num">${fmtN(T.facturado)}</td><td class="num">${fmtN(T.debitado)}</td><td class="num">${pct(T.debitado, T.factPagado)}</td><td class="num">${fmtN(T.cobrado)}</td><td class="num">${fmtN(T.deuda)}</td><td class="num">${T.nImp}</td><td></td><td class="num">${T.dN ? Math.round(T.dS / T.dN) : '—'}</td><td class="num">${fmtN(T.nc)}</td></tr></table></div>
+      <p class="note"><b>Cómo se calcula.</b> Facturado = importe de las facturas enviadas en el período. Debitado = columna DÉBITO. Cobrado = SALDO (importe − débito) de las facturas con fecha de pago. Deuda = SALDO de las facturas sin fecha de pago registrada (si un pago no se cargó en la planilla, la factura figura como deuda). % débito = debitado sobre lo facturado ya pagado. Las notas de crédito se muestran aparte y no se restan de la deuda: la planilla no indica a qué factura corresponde cada una (en PAMI replican débitos ya aplicados).
+      ${nVar ? `La planilla escribe la misma obra social de distintas formas: ${nVar} financiadores reúnen más de un nombre (agrupación automática por palabras clave; ver el detalle de cada fila).` : ''}
+      ${rar ? ` ${rar} comprobante(s) con fecha de envío inválida o futura no se incluyen.` : ''}${pagoRaro ? ` ${pagoRaro} factura(s) tienen una fecha de pago mal escrita: se cuentan como cobradas pero no entran en el plazo de cobro.` : ''}</p></div>`;
+}
+function bindOS() {
+  const rt = $('#factRetry'); if (rt) rt.onclick = () => { factError = ''; render(); };
+  const a = $('#ofAnio'); if (a) a.onchange = () => { OF.anio = a.value; render(); };
+  const p = $('#ofSinPami'); if (p) p.onchange = () => { OF.sinPami = p.checked; render(); };
+  document.querySelectorAll('.os-t th.sortable').forEach(h => h.onclick = () => { OF.orden = h.dataset.ord; render(); });
+  document.querySelectorAll('.os-t tr.clk').forEach(r => r.onclick = () => { OF.abierta = OF.abierta === r.dataset.o ? null : r.dataset.o; render(); });
+}
+
 /* Valor $ de cada rechazo de guardia (para la pestaña Rechazos) */
 function valorRech(r) {
   if (!FACT) return null;
