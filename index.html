@@ -1536,7 +1536,7 @@ const OS_REGLAS = [
   [/PETROLEROS/, 'O.S. Petroleros'],
   [/ENSENANZA PRIVADA/, 'O.S. Personal Enseñanza Privada'],
   [/SERVICIOS SOCIALES BANCARIOS/, 'O.S. Servicios Sociales Bancarios'],
-  [/UNION PERSONAL|UNION DEL PER/, 'Unión Personal'],
+  [/\bUPCN\b|UNION PERSONAL|UNION DEL PER/, 'Unión Personal (UPCN)'], // Unión Personal Civil de la Nación
   [/PODER JUDICIAL/, 'O.S. Poder Judicial de la Nación'],
   [/SYNEOS/, 'Syneos Health'],
   [/SWISS MEDICAL/, 'Swiss Medical'],
@@ -1610,7 +1610,9 @@ function vOS() {
   const trMx = Math.max(1, ...tr.map(t => t.m));
   const rar = todos.filter(c => c.fechaRara).length, pagoRaro = todos.filter(c => c.pagada && !c.pagoOk).length;
   const nVar = A.filter(o => Object.keys(o.nombres).length > 1).length;
-  const sinPagos = A.filter(o => o.nF >= 5 && o.nImp === o.nF);
+  // Sin pagos registrados: se avisa salvo las que Administración confirmó como deuda real
+  const DEUDA_CONFIRMADA = ['Unión Personal (UPCN)'];
+  const sinPagos = A.filter(o => o.nF >= 5 && o.nImp === o.nF && !DEUDA_CONFIRMADA.includes(o.os));
   const th = (k, l) => `<th class="num sortable${OF.orden === k ? ' on' : ''}" data-ord="${k}">${l}${OF.orden === k ? ' ▾' : ''}</th>`;
   const fila = o => {
     const ab = OF.abierta === o.os;
