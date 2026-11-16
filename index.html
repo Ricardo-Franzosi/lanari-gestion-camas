@@ -1558,6 +1558,7 @@ const OS_REGLAS = [
 const osNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[.,()]/g, ' ').replace(/\s+/g, ' ').trim();
 function osCanon(raw) { const n = osNorm(raw); for (const [re, c] of OS_REGLAS) if (re.test(n)) return c; return String(raw || '').trim().replace(/\s+/g, ' '); }
 const esPami = c => c === 'PAMI (INSSJP)';
+const esDosuba = c => c === 'DOSUBA';
 const isoOk = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
 const diasEntre = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
 let OF = { anio: 'all', abierta: null, orden: 'facturado' };
@@ -1593,7 +1594,8 @@ function vOS() {
   }
   if (!FACT.os || !FACT.os.length) return head + `<div class="state"><h2>Todavía no hay datos de obras sociales</h2><p>La hoja privada no tiene la pestaña FAC_OS. Se genera con la actualización diaria del script (7:30).</p></div>`;
   const todos = FACT.os.filter(c => !esPami(c.os)), anios = [...new Set(todos.filter(c => !c.fechaRara).map(c => c.fecha.slice(0, 4)))].sort();
-  const C = todos.filter(c => !c.fechaRara && !esPami(c.os) && (OF.anio === 'all' || c.fecha.startsWith(OF.anio)));
+  const C0 = todos.filter(c => !c.fechaRara && (OF.anio === 'all' || c.fecha.startsWith(OF.anio)));
+  const C = C0.filter(c => !esDosuba(c.os)), D = C0.filter(c => esDosuba(c.os) && c.tipo === 'FACTURA');
   const A = aggOS(C);
   const T = A.reduce((t, o) => { ['nF', 'facturado', 'nNC', 'nc', 'debitado', 'factPagado', 'cobrado', 'deuda', 'nImp', 'dS', 'dN'].forEach(k => t[k] = (t[k] || 0) + o[k]); return t; }, {});
   const ord = { facturado: (a, b) => b.facturado - a.facturado, deuda: (a, b) => b.deuda - a.deuda, debitado: (a, b) => b.debitado - a.debitado, pDeb: (a, b) => (b.pDeb ?? -1) - (a.pDeb ?? -1), dias: (a, b) => (b.diasCobro ?? -1) - (a.diasCobro ?? -1), edad: (a, b) => b.maxEdad - a.maxEdad }[OF.orden];
@@ -1622,7 +1624,7 @@ function vOS() {
       </div></td></tr>` : '');
   };
   return head + `<div class="rfil" style="display:flex;gap:18px;align-items:center;margin-bottom:12px"><span><b>Año de envío:</b> <select id="ofAnio"><option value="all">2025 y 2026</option>${anios.map(a => `<option ${OF.anio === a ? 'selected' : ''}>${a}</option>`).join('')}</select></span>
-      <span class="muted">Sin PAMI: su facturación, débitos y recuperos se analizan en la pestaña <a href="#facturacion">Facturación PAMI</a>.</span></div>
+      <span class="muted">Sin PAMI (se analiza en la pestaña <a href="#facturacion">Facturación PAMI</a>). DOSUBA va aparte, al final.</span></div>
     <div class="kpis">
       <div class="kpi"><b>${fmtMM(T.facturado)}</b><span>Facturado (${T.nF} facturas · ${A.length} financiadores)</span></div>
       <div class="kpi" style="border-color:#e8b4ad"><b style="color:#c0392b">${fmtMM(T.debitado)}</b><span>Debitado · ${pct(T.debitado, T.factPagado)} de lo facturado ya pagado</span></div>
@@ -1633,7 +1635,7 @@ function vOS() {
     </div>
     ${sinPagos.length ? `<div class="card" style="border-left:4px solid #d98a2b"><b>A revisar con Cobranzas:</b> ${sinPagos.map(o => `<b>${esc(o.os)}</b> (${o.nF} facturas, ${fmtMM(o.deuda)})`).join(', ')} no ${sinPagos.length > 1 ? 'tienen' : 'tiene'} ninguna fecha de pago registrada en la planilla. Esa deuda puede ser real o deberse a que los pagos no se cargan; sin la fecha de pago no se puede distinguir.</div>` : ''}
     <div class="grid2">
-      <div class="card"><h2>Facturado por mes de envío</h2><div class="sub">En millones de pesos, sin PAMI</div>
+      <div class="card"><h2>Facturado por mes de envío</h2><div class="sub">En millones de pesos, sin PAMI ni DOSUBA</div>
         ${lineChart(ys.map(y => ({ name: y, vals: serie(y, x => x.reduce((s, c) => s + c.imp, 0)), color: colY[y] || '#0f5e6e', w: 2.4 })), { H: 210 })}
         <div class="leg">${ys.map(y => `<span><i style="background:${colY[y] || '#0f5e6e'}"></i>${y}</span>`).join('')}</div></div>
       <div class="card"><h2>Antigüedad de la deuda</h2><div class="sub">Facturas sin fecha de pago, por días desde el envío</div>
@@ -1644,9 +1646,18 @@ function vOS() {
       <div class="tw"><table class="ind-t os-t"><tr><th>Obra social / financiador</th><th class="num">Facturas</th>${th('facturado', 'Facturado')}${th('debitado', 'Debitado')}${th('pDeb', '% débito')}<th class="num">Cobrado</th>${th('deuda', 'Deuda')}<th class="num">Fact. impagas</th>${th('edad', 'Deuda más antigua (días)')}${th('dias', 'Días prom. cobro')}<th class="num">Notas de crédito</th></tr>
       ${A.map(fila).join('')}
       <tr class="tot"><td>Total</td><td class="num">${T.nF}</td><td class="num">${fmtN(T.facturado)}</td><td class="num">${fmtN(T.debitado)}</td><td class="num">${pct(T.debitado, T.factPagado)}</td><td class="num">${fmtN(T.cobrado)}</td><td class="num">${fmtN(T.deuda)}</td><td class="num">${T.nImp}</td><td></td><td class="num">${T.dN ? Math.round(T.dS / T.dN) : '—'}</td><td class="num">${fmtN(T.nc)}</td></tr></table></div>
-      <p class="note"><b>Cómo se calcula.</b> Facturado = importe de las facturas enviadas en el período. Debitado = columna DÉBITO. Cobrado = SALDO (importe − débito) de las facturas con fecha de pago. Deuda = SALDO de las facturas sin fecha de pago registrada (si un pago no se cargó en la planilla, la factura figura como deuda). % débito = debitado sobre lo facturado ya pagado. Las notas de crédito se muestran aparte y no se restan de la deuda: la planilla no indica a qué factura corresponde cada una .
+      <p class="note"><b>Cómo se calcula.</b> Facturado = importe de las facturas enviadas en el período. Debitado = columna DÉBITO. Cobrado = SALDO (importe − débito) de las facturas con fecha de pago. Deuda = SALDO de las facturas sin fecha de pago registrada (si un pago no se cargó en la planilla, la factura figura como deuda). % débito = debitado sobre lo facturado ya pagado. Las notas de crédito se muestran aparte y no se restan de la deuda: la planilla no indica a qué factura corresponde cada una.
       ${nVar ? `La planilla escribe la misma obra social de distintas formas: ${nVar} financiadores reúnen más de un nombre (agrupación automática por palabras clave; ver el detalle de cada fila).` : ''}
-      ${rar ? ` ${rar} comprobante(s) con fecha de envío inválida o futura no se incluyen.` : ''}${pagoRaro ? ` ${pagoRaro} factura(s) tienen una fecha de pago mal escrita: se cuentan como cobradas pero no entran en el plazo de cobro.` : ''}</p></div>`;
+      ${rar ? ` ${rar} comprobante(s) con fecha de envío inválida o futura no se incluyen.` : ''}${pagoRaro ? ` ${pagoRaro} factura(s) tienen una fecha de pago mal escrita: se cuentan como cobradas pero no entran en el plazo de cobro.` : ''}</p></div>
+    ${D.length ? (() => { const tot = D.reduce((x, c) => x + c.saldo, 0), ys2 = [...new Set(D.map(c => c.fecha.slice(0, 4)))].sort();
+      const trD = TRAMOS.map(([a, b, l]) => { const x = D.filter(c => c.edad != null && c.edad >= a && c.edad <= b); return { l, n: x.length, m: x.reduce((q, c) => q + c.saldo, 0) }; }); const mxD = Math.max(1, ...trD.map(t => t.m));
+      const mes = {}; D.forEach(c => { const m = c.fecha.slice(0, 7); mes[m] = mes[m] || { n: 0, m: 0 }; mes[m].n++; mes[m].m += c.saldo; });
+      return `<div class="card" style="border-left:4px solid #6b5b95"><h2>DOSUBA · Obra Social de la Universidad de Buenos Aires</h2><div class="sub">Tratamiento aparte: DOSUBA (obra social de la UBA) no tiene pagos registrados al Instituto (dato de Administración), por lo que todo lo facturado queda como deuda acumulada. No se incluye en los totales de arriba.</div>
+        <div class="kpis"><div class="kpi" style="border-color:#c9bfe0"><b style="color:#6b5b95">${fmtMM(tot)}</b><span>Deuda acumulada (${D.length} facturas)</span></div>
+          ${ys2.map(y => { const x = D.filter(c => c.fecha.startsWith(y)); return `<div class="kpi"><b>${fmtMM(x.reduce((q, c) => q + c.saldo, 0))}</b><span>Facturado ${y} (${x.length} facturas)</span></div>`; }).join('')}
+          <div class="kpi"><b>${fmtMM(tot / Math.max(1, Object.keys(mes).length))}</b><span>Promedio mensual facturado (${Object.keys(mes).length} meses)</span></div></div>
+        <div class="grid2"><div><h3 style="font-size:13px">Por mes de envío</h3><div class="tw" style="max-height:300px"><table><tr><th>Mes</th><th class="num">Facturas</th><th class="num">Importe</th></tr>${Object.keys(mes).sort().map(m => `<tr><td class="mono">${m.slice(5)}/${m.slice(0, 4)}</td><td class="num">${mes[m].n}</td><td class="num">${fmtN(mes[m].m)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="num">${D.length}</td><td class="num">${fmtN(tot)}</td></tr></table></div></div>
+        <div><h3 style="font-size:13px">Antigüedad</h3><table>${trD.map(t => `<tr><td style="width:110px">${t.l}</td><td><div class="hbar"><i style="width:${t.m / mxD * 100}%;background:#8e7cc3"></i></div></td><td class="num">${fmtN(t.m)}</td><td class="num muted">${t.n} fact.</td></tr>`).join('')}</table></div></div></div>`; })() : ''}`;
 }
 function bindOS() {
   const rt = $('#factRetry'); if (rt) rt.onclick = () => { factError = ''; render(); };
