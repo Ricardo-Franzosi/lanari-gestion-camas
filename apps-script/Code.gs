@@ -369,7 +369,7 @@ function actualizarFacturacion() {
         const os = String(r[1] || '').toUpperCase().replace(/\s/g, '');
         if (!(/^INS.*JP/.test(os) || /PAMI|UGL/.test(os))) return;
         const f = r[0] instanceof Date ? r[0] : null; if (!f || f.getFullYear() < 2025) return;
-        const tipo = /^N\.?\s*C|NOTA/i.test(String(r[2]).trim()) ? 'NC' : 'FACTURA';
+        const tipo = /^N\s*[\/.]?\s*C|NOTA/i.test(String(r[2]).trim()) ? 'NC' : 'FACTURA'; // NC, N/C, N. CREDITO
         out.push([Utilities.formatDate(f, tz, 'yyyy-MM-dd'), tipo, String(r[3] || ''), typeof r[4] === 'number' ? r[4] : '', r[7] instanceof Date ? Utilities.formatDate(r[7], tz, 'yyyy-MM-dd') : String(r[7] || ''),
           typeof r[8] === 'number' ? r[8] : '', prev[String(r[3] || '')] ? 'SI' : '']);
       });
