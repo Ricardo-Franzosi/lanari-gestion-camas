@@ -166,6 +166,12 @@ button.lnk,a.lnk{background:none;border:0;color:#0f5e6e;font:inherit;font-size:1
 .ind-t th.sortable{cursor:pointer;white-space:nowrap}.ind-t td:first-child{min-width:170px}.ind-t th,.ind-t td{padding-left:8px;padding-right:8px}.ind-t th.sortable.on{color:#0f5e6e}
 .ind-t tr.clk{cursor:pointer}.ind-t tr.clk:hover td{background:#f4f8f6}.ind-t tr.sel td{background:#e8f3f5}
 .ind-t tr.det td{background:#fbfcfb;padding:12px}
+.hint-clk{display:flex;gap:12px;align-items:center;background:#fff4d6;border:1px solid #f0c860;border-left:5px solid #e0a800;border-radius:8px;padding:10px 14px;margin:8px 0 10px;font-size:14px;color:#5a4300;animation:hintPulse 2.2s ease-in-out 3}
+.hint-ico{font-size:22px;line-height:1}
+@keyframes hintPulse{0%,100%{box-shadow:0 0 0 0 rgba(224,168,0,0)}50%{box-shadow:0 0 0 6px rgba(224,168,0,.25)}}
+.chev{display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;margin-right:6px;border-radius:4px;background:#e8f3f5;color:#0f5e6e;font-size:11px;font-weight:700}
+.ind-t tr.clk:hover .chev{background:#0f5e6e;color:#fff}
+.ind-t tr.clk:hover td b{text-decoration:underline}
 .muted{color:var(--muted)}.osdet{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:18px}.osdet h3{font-size:13px;margin:0 0 6px}.osdet ul{margin:0;padding-left:18px;font-size:12.5px}.ind-t th.sortable{cursor:pointer}.ind-t th.sortable.on{color:var(--ink,#123)}
 @media (max-width:760px){.osdet{grid-template-columns:1fr}}
 .ind-det{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
@@ -1435,9 +1441,9 @@ function vFactEsp() {
       <div class="kpi"><b>${(top3 * 100).toFixed(0)}%</b><span>Concentración en las 3 primeras</span></div>
       <div class="kpi"><b>${fmtMM(capita)}</b><span>Cápita (aparte: no se atribuye a especialidades)</span></div>
     </div>
-    <div class="card"><h2>Ranking por facturación</h2><div class="sub">Tocá una especialidad para ver sus códigos y la evolución mensual. Encabezados ordenables. Promedios mensuales: 2025 sobre 12 meses de liquidación; 2026 sobre los meses liquidados del año.</div>
+    <div class="card"><h2>Ranking por facturación</h2><div class="hint-clk"><span class="hint-ico">👆</span><div><b>Hacé clic en cualquier especialidad</b> para desplegar sus códigos y la evolución mes a mes de su facturación.</div></div><div class="sub">Encabezados ordenables. Promedios mensuales: 2025 sobre 12 meses de liquidación; 2026 sobre los meses liquidados del año.</div>
       <div class="tw" style="max-height:none"><table class="ind-t"><tr><th>#</th><th>Especialidad</th><th></th>${th('total', 'Facturado')}${th('part', '% del total')}${th('prom', 'Promedio mensual')}${th('var', 'Var. prom. 2026 vs 2025')}${th('meses', 'Meses con fact.')}${th('lag', 'Demora prest.→liq. (meses)')}<th>Mes pico</th></tr>
-      ${R.map((r, i) => `<tr class="clk ${FF.espAbierta === r.esp ? 'sel' : ''}" data-e="${esc(r.esp)}"><td class="num">${i + 1}</td><td><b>${esc(r.esp)}</b>${r.nMods > 1 ? ` <span class="note" style="margin:0">(${r.nMods} códigos)</span>` : ''}</td><td style="width:16%"><div class="hbar"><i style="width:${r.total / mx * 100}%;background:#0f5e6e"></i></div></td>
+      ${R.map((r, i) => `<tr class="clk ${FF.espAbierta === r.esp ? 'sel' : ''}" data-e="${esc(r.esp)}"><td class="num">${i + 1}</td><td><span class="chev">${FF.espAbierta === r.esp ? '▾' : '▸'}</span><b>${esc(r.esp)}</b>${r.nMods > 1 ? ` <span class="note" style="margin:0">(${r.nMods} códigos)</span>` : ''}</td><td style="width:16%"><div class="hbar"><i style="width:${r.total / mx * 100}%;background:#0f5e6e"></i></div></td>
         <td class="num">${fmtN(r.total)}</td><td class="num">${(r.part * 100).toFixed(1)}%</td><td class="num">${fmtN(r.prom)}</td>
         <td class="num">${r.var == null ? '<span class="delta eq">—</span>' : `<span class="delta ${Math.abs(r.var) < .01 ? 'eq' : r.var > 0 ? 'up' : 'dn'}">${r.var > 0 ? '+' : ''}${(r.var * 100).toFixed(0)}%</span>`}</td>
         <td class="num">${r.nMeses}</td><td class="num">${r.lag == null ? '—' : r.lag.toFixed(1)}</td><td class="mono">${r.pico ? r.pico[0].slice(5) + '/' + r.pico[0].slice(0, 4) : ''}</td></tr>
