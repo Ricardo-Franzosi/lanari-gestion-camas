@@ -328,6 +328,7 @@ function autorizar() {
  *  3. recalcula REC_RECH: valor en $ de cada rechazo de guardia (mails y libro) cruzando con las OP de recupero.
  */
 function instalarFacturacion() {
+  PropertiesService.getScriptProperties().deleteProperty('FACT_PORTAL'); // fuerza reimportar el último archivo del portal
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'actualizarFacturacion').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('actualizarFacturacion').timeBased().everyDays(1).atHour(7).nearMinute(30).create();
   return actualizarFacturacion();
@@ -351,7 +352,7 @@ function actualizarFacturacion() {
           headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, payload: JSON.stringify({ name: 'tmp portal pami', mimeType: 'application/vnd.google-apps.spreadsheet' }), muteHttpExceptions: true });
         tmp = JSON.parse(r.getContentText()).id;
         const src = SpreadsheetApp.openById(tmp);
-        ['FAC_LIQ', 'FAC_MOD', 'REC_LAB', 'REC_OPS'].forEach(n => { const sh = src.getSheetByName(n); if (sh) escribirHoja_(ss, n, sh.getDataRange().getValues()); });
+        ['FAC_LIQ', 'FAC_MOD', 'REC_LAB', 'REC_OPS'].forEach(n => { const sh = src.getSheetByName(n); if (sh) escribirHoja_(ss, n, sh.getDataRange().getValues().map(r => r.map(v => v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM') : v))); }); // períodos como texto AAAA-MM
         props.setProperty('FACT_PORTAL', firma);
         log.push('portal: ' + ult.getName());
       } finally { if (tmp) try { DriveApp.getFileById(tmp).setTrashed(true); } catch (e) {} }
@@ -395,11 +396,19 @@ function escribirHoja_(ss, nombre, vals) {
   sh.clearContents();
   if (!vals.length) return;
   const w = Math.max(...vals.map(r => r.length));
-  sh.getRange(1, 1, vals.length, w).setValues(vals.map(r => r.concat(Array(w - r.length).fill(''))));
+  const rg = sh.getRange(1, 1, vals.length, w);
+  // Columnas de texto (períodos "2026-01", N° de OP o beneficio) en formato texto para que Sheets no las convierta en fechas o números
+  const txt = vals[0].map((_, j) => vals.slice(1).some(r => typeof r[j] === 'string' && r[j] !== ''));
+  txt.forEach((t, j) => { if (t) sh.getRange(1, j + 1, vals.length, 1).setNumberFormat('@'); });
+  rg.setValues(vals.map(r => r.concat(Array(w - r.length).fill(''))));
 }
 
 /** Cruce rechazos ↔ OP de recupero (módulo 69). Función pura: recibe y devuelve matrices de valores. */
 function construirRecRech_(opsV, guardiaV, libroV) {
+  // Las celdas con fecha llegan como Date: pasarlas a texto AAAA-MM-DD antes de comparar períodos
+  const p2 = n => String(n).padStart(2, '0');
+  const sinFechas = M => (M || []).map(r => r.map(v => v instanceof Date ? v.getFullYear() + '-' + p2(v.getMonth() + 1) + '-' + p2(v.getDate()) : v));
+  opsV = sinFechas(opsV); guardiaV = sinFechas(guardiaV); libroV = sinFechas(libroV);
   const z = s => String(s == null ? '' : s).replace(/^0+/, '');
   const ymI = p => +p.slice(0, 4) * 12 + +p.slice(5, 7);
   const perTxt = p => p.slice(5, 7) + '/' + p.slice(0, 4);

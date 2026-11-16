@@ -1325,13 +1325,15 @@ const ESPEC_MOD = {
 const MOD_ESP = {}; Object.entries(ESPEC_MOD).forEach(([e, ms]) => ms.forEach(m => MOD_ESP[m] = e));
 const espDe = r => { const c = +r.modulo_cod; if (c >= 600 && c < 700 || c === 144 || c === 145) return 'Oncología'; if (c === 69) return 'Internación por OP (módulo 69)'; return MOD_ESP[c] || ('Módulo ' + r.modulo_cod + ' · ' + r.modulo); };
 const GRUPOS_PREST = ['OP (módulos quirúrgicos/intervencionismo)', 'Pago por prestación', 'Oncología', 'Otros'];
+// Google Sheets convierte "2026-01" en fecha (2026-01-01): normalizar todo período a AAAA-MM
+const perYM = v => { const t = String(v == null ? '' : v).trim(); if (/^\d{6}$/.test(t)) return t.slice(0, 4) + '-' + t.slice(4); return /^\d{4}-\d{2}/.test(t) ? t.slice(0, 7) : t; };
 function parseFact(h) {
-  const liq = tablaObj(h.FAC_LIQ).map(r => ({ per: String(r.periodo_liq), grupo: r.grupo, imp: numF(r.importe) }));
+  const liq = tablaObj(h.FAC_LIQ).map(r => ({ per: perYM(r.periodo_liq), grupo: r.grupo, imp: numF(r.importe) }));
   const fac = tablaObj(h.FAC_FACT).map(r => ({ fecha: String(r.fecha_envio).slice(0, 10), tipo: r.tipo, num: r.numero, imp: numF(r.importe), pago: String(r.fecha_pago || ''), deb: numF(r.debito), dc: r.es_capita_dc === 'SI' }));
-  const mod = tablaObj(h.FAC_MOD).map(r => ({ per: String(r.periodo_liq), prest: String(r.periodo_prest), grupo: r.grupo, modulo_cod: String(r.modulo_cod), modulo: r.modulo, imp: numF(r.importe) }));
-  const lab = tablaObj(h.REC_LAB).map(r => ({ per: String(r.periodo_liq), mod: String(r.modulo_cod), nom: r.modulo, ops: numF(r.ops_listadas), list: numF(r.monto_listado), deb: numF(r.debito_recuperos_liquidado), cargo: numF(r.cargo_adm_liquidado) }));
+  const mod = tablaObj(h.FAC_MOD).map(r => ({ per: perYM(r.periodo_liq), prest: perYM(r.periodo_prest), grupo: r.grupo, modulo_cod: String(r.modulo_cod), modulo: r.modulo, imp: numF(r.importe) }));
+  const lab = tablaObj(h.REC_LAB).map(r => ({ per: perYM(r.periodo_liq), mod: String(r.modulo_cod), nom: r.modulo, ops: numF(r.ops_listadas), list: numF(r.monto_listado), deb: numF(r.debito_recuperos_liquidado), cargo: numF(r.cargo_adm_liquidado) }));
   const rech = tablaObj(h.REC_RECH).map(r => ({ tipo: r.tipo_fila, clas: r.clasificacion, nros: String(r.n_rechazo_guardia || '').split(',').map(s => s.trim()).filter(Boolean), fecha: String(r.fecha_rechazo || '').slice(0, 10),
-    pac: String(r.paciente || ''), ben: String(r.beneficio || ''), motivo: String(r.motivo || ''), prest: String(r.prestador_que_interno || ''), meses: numF(r.meses_internado), desde: String(r.prestacion_desde || ''), hasta: String(r.prestacion_hasta || ''),
+    pac: String(r.paciente || ''), ben: String(r.beneficio || ''), motivo: String(r.motivo || ''), prest: String(r.prestador_que_interno || ''), meses: numF(r.meses_internado), desde: perYM(r.prestacion_desde || ''), hasta: perYM(r.prestacion_hasta || ''),
     op: String(r.op_inicial || ''), ops: String(r.ops || ''), monto: numF(r.monto_recupero), cargo: numF(r.cargo_adm), costo: numF(r.costo_total), liqs: String(r.liquidaciones || ''), nota: String(r.nota || '') }));
   const meta = {}; tablaObj(h.META).forEach(r => meta[r.clave] = r.valor);
   mod.forEach(r => r.esp = espDe(r));
