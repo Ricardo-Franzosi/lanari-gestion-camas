@@ -51,7 +51,7 @@ Los datos **no están en este repositorio**: viven en la carpeta privada de Driv
 
 ## Facturación a obras sociales
 
-Pestaña **Facturación OS** (responsable del área de Facturación y Presupuestos: Silvana Marano). Desde 01/2025, por obra social: facturado, debitado, cobrado (saldo de las facturas con fecha de pago), deuda (saldo de las facturas sin fecha de pago), antigüedad de la deuda, plazo promedio de cobro y notas de crédito. Fuente: planilla "gestion" de Facturación/Cobranzas; el script la copia cada día a la pestaña privada FAC_OS (dentro de `actualizarFacturacion()`). Las variantes de nombre de una misma obra social se agrupan en el panel por palabras clave (`OS_REGLAS` en index.html).
+Pestaña **Facturación OS** (responsable del área de Facturación y Presupuestos: Silvana Marano). Desde 01/2025, por obra social (sin PAMI, que tiene su propia pestaña): facturado, debitado, cobrado (saldo de las facturas con fecha de pago), deuda (saldo de las facturas sin fecha de pago), antigüedad de la deuda, plazo promedio de cobro y notas de crédito. Fuente: planilla "gestion" de Facturación/Cobranzas; el script la copia cada día a la pestaña privada FAC_OS (dentro de `actualizarFacturacion()`). Las variantes de nombre de una misma obra social se agrupan en el panel por palabras clave (`OS_REGLAS` en index.html).
 
 ## Cómo funciona el acceso
 
