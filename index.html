@@ -1644,6 +1644,15 @@ function vOS() {
         <table>${tr.map(t => `<tr><td style="width:110px">${t.l}</td><td><div class="hbar"><i style="width:${t.m / trMx * 100}%;background:#d98a2b"></i></div></td><td class="num">${fmtN(t.m)}</td><td class="num muted">${t.n} fact.</td></tr>`).join('')}
         <tr class="tot"><td>Total</td><td></td><td class="num">${fmtN(T.deuda)}</td><td class="num">${T.nImp}</td></tr></table></div>
     </div>
+    ${(() => { // Mora > 90 días: sobre todas las facturas impagas desde 2025 (no depende del filtro de año). Sin PAMI ni DOSUBA.
+      const M = {}; todos.filter(c => !c.fechaRara && !esDosuba(c.os) && c.tipo === 'FACTURA' && !c.pagada && c.edad > 90).forEach(c => {
+        const o = M[c.os] = M[c.os] || { os: c.os, n: 0, m: 0, max: 0, desde: c.fecha }; o.n++; o.m += c.saldo; if (c.edad > o.max) { o.max = c.edad; o.desde = c.fecha; } });
+      const deudaTot = {}; todos.filter(c => !c.fechaRara && !esDosuba(c.os) && c.tipo === 'FACTURA' && !c.pagada).forEach(c => deudaTot[c.os] = (deudaTot[c.os] || 0) + c.saldo);
+      const L = Object.values(M).sort((x, y) => y.m - x.m), tm = L.reduce((q, o) => q + o.m, 0), tn = L.reduce((q, o) => q + o.n, 0);
+      return `<div class="card" style="border-left:4px solid #c0392b"><h2>Obras sociales con más de 90 días de mora</h2><div class="sub">Facturas sin fecha de pago enviadas hace más de 90 días, sobre todas las facturas desde 01/2025 (no depende del filtro de año). Sin PAMI ni DOSUBA.</div>
+        ${L.length ? `<div class="tw" style="max-height:420px"><table><tr><th>#</th><th>Obra social / financiador</th><th class="num">Facturas en mora</th><th class="num">Deuda en mora (+90 días)</th><th class="num">Deuda total</th><th class="num">Mora máxima (días)</th><th>Factura más antigua</th></tr>
+        ${L.map((o, i) => `<tr><td class="muted">${i + 1}</td><td><b>${esc(o.os)}</b></td><td class="num">${o.n}</td><td class="num" style="color:#c0392b;font-weight:600">${fmtN(o.m)}</td><td class="num">${fmtN(deudaTot[o.os])}</td><td class="num">${o.max}</td><td class="mono">${o.desde.split('-').reverse().join('/')}</td></tr>`).join('')}
+        <tr class="tot"><td></td><td>Total (${L.length} financiadores)</td><td class="num">${tn}</td><td class="num">${fmtN(tm)}</td><td class="num">${fmtN(L.reduce((q, o) => q + deudaTot[o.os], 0))}</td><td></td><td></td></tr></table></div>` : '<p class="muted">No hay facturas con más de 90 días de mora.</p>'}</div>`; })()}
     <div class="card"><h2>Por obra social</h2><div class="sub">Tocá una fila para ver los nombres agrupados y las facturas pendientes. Encabezados ordenables.</div>
       <div class="tw"><table class="ind-t os-t"><tr><th>Obra social / financiador</th><th class="num">Facturas</th>${th('facturado', 'Facturado')}${th('debitado', 'Debitado')}${th('pDeb', '% débito')}<th class="num">Cobrado</th>${th('deuda', 'Deuda')}<th class="num">Fact. impagas</th>${th('edad', 'Deuda más antigua (días)')}${th('dias', 'Días prom. cobro')}<th class="num">Notas de crédito</th></tr>
       ${A.map(fila).join('')}
