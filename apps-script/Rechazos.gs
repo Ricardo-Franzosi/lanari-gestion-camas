@@ -193,7 +193,7 @@ function extraer_(asunto, cuerpo) {
   const dx = (t.match(/\b(?:dx|diagn[oó]stico(?:\s+de)?)\s*:?\s*([^.;,\n]{3,80})/i) || [])[1];
   // Lugar donde aguarda: "aguarda en", "espera en", "se encuentra en", "permanece en", "aguarda en: …" (hasta el punto)
   let donde = (t.match(/\b(?:aguarda(?:ndo)?|espera(?:ndo)?|se encuentra|permanece|esta|está|ubicad[oa])\s+en\s*:?\s+(?:la |el |su )?([^.;\n]{3,120}?)(?=\s+(?:dx|con dx|por|con diagn)\b|\s+--|\s+secretar[ií]a de guardia|[.;\n]|$)/i) || [])[1];
-  if (donde) donde = donde.replace(/,\s*(?:dx|diagn).*$/i, '');
+  if (donde) donde = donde.replace(/,\s*(?:dx|diagn).*$/i, '').replace(/\s+(?:saludos|atte\.?|atentamente|gracias|muchas gracias)\b.*$/i, '');
   // Tipo
   const tipo = /ambulancia/.test(lowAs) && !/derivacion/.test(lowAs) || /rechazo de ambulancia/.test(low) ? 'Rechazo de ambulancia'
     : /derivacion/.test(lowAs) || /derivacion/.test(low) ? 'Rechazo + pedido de derivación' : 'Rechazo conformado';
