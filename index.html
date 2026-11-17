@@ -79,6 +79,7 @@ main{padding:18px 20px 40px;max-width:1500px;margin:0 auto}
 .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px}
 .tag.a{background:var(--aisl);color:#fff}
 .tag.p{background:var(--pase);color:#fff}
+.sx{display:inline-block;font:700 10px/15px system-ui,sans-serif;width:15px;text-align:center;border-radius:50%;color:#fff;vertical-align:1px}.sx.F{background:#c2569b}.sx.M{background:#3a72c4}
 .tag.w{background:#fdf1dc;color:#8a5a12}
 .tag.g{background:#e3f4ea;color:#17673f}
 .tag.r{background:#fbe5e2;color:#9b2c20}
@@ -847,13 +848,20 @@ const L = (() => {
       return { nombre: e.nombre, anios };
     }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }
+  // Pestaña CAMAS: tríos (cama, paciente, SEXO) en columnas B-D, G-I y L-N.
+  function parseSexo(rows) {
+    const m = {};
+    rows.forEach(rw => [1, 6, 11].forEach(c => { const id = up(rw[c]).replace(/\s+/g, ' '); const sx = up(rw[c + 2]);
+      if (id && /^[FM]$/.test(sx)) m[id] = { sx, pac: !!norm(rw[c + 1]) }; }));
+    return m;
+  }
   function analizar(book) {
     const listado = parseListado(findSheet(book, 'LISTADO DIARIO') || []);
     const peds = parsePedidos(findSheet(book, 'Pedidos') || []);
     return {
       listado, camas: resumenCamas(listado), pedidos: peds, susp: suspensiones(peds), rep: repetidos(peds), meses: porMes(peds),
       agenda: parseAgenda(findSheet(book, 'AGENDA') || []), guardia: parseGuardia(findSheet(book, 'GUARDIA') || []),
-      camilleros: parseCamilleros(findSheet(book, 'CAMILLEROS') || []), estadisticas: parseEstadisticas(book), rechazos: parseRechazos(findSheet(book, 'RECHAZOS') || findSheet(book, 'Rechazos') || []), hojas: Object.keys(book),
+      camilleros: parseCamilleros(findSheet(book, 'CAMILLEROS') || []), sexo: parseSexo(findSheet(book, 'CAMAS') || []), estadisticas: parseEstadisticas(book), rechazos: parseRechazos(findSheet(book, 'RECHAZOS') || findSheet(book, 'Rechazos') || []), hojas: Object.keys(book),
     };
   }
   return { parseTextExport, parseCSV, analizar, parseEstadisticas, parseTablasHoja, nombreEspecialidad, SECTORES, fmt, dayKey, fechaDMA, fechaMDA };
@@ -1154,12 +1162,13 @@ function vMapa() {
       <span style="--c:#1f8a5b;">Libre</span><span style="--c:var(--ocup-bg)">Ocupada</span><span style="--c:var(--alta-bg)">Alta / libera cama</span>
       <span style="--c:var(--pase-bg)">Pase</span><span style="--c:#eaf2fb">Reservada (Hemodinamia / Trasplante)</span><span style="--c:var(--esp-bg)">Esperando cama / ing. cancelado</span><span class="lg-aisl" style="--c:#fff">Borde rojo = aislamiento</span></div>
     <div class="sectors">${sects}</div>${prog}
-    <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (incluye D1–D2 Hemodinamia, D3–D4 Internación general y D5–D6 Trasplante, según la pestaña CAMAS) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. </p>`;
+    <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (incluye D1–D2 Hemodinamia, D3–D4 Internación general y D5–D6 Trasplante, según la pestaña CAMAS) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. <span class="sx F">F</span> / <span class="sx M">M</span>: sexo según la columna SEXO de la pestaña CAMAS (en camas libres, solo si está cargado ahí).</p>`;
 }
 function bed(c) {
   const a = c.aisl && c.aisl !== 'SIN AISLAMIENTO';
-  const info = [c.id, c.paciente && (PRIV ? nm(c.paciente) : c.paciente), c.estado, a ? 'Aislamiento: ' + c.aisl : '', c.pasa ? 'Pasa a cama: ' + c.pasa : ''].filter(Boolean).join('\n');
-  return `<div class="bed ${cls(c.estado)} ${a ? 'aisl' : ''}" data-tip="${esc(info)}"><div class="id">${esc(c.id)}</div>
+  const sx = DATA && DATA.sexo && DATA.sexo[c.id], sxT = sx ? (sx.sx === 'F' ? 'Femenino' : 'Masculino') : '';
+  const info = [c.id, c.paciente && (PRIV ? nm(c.paciente) : c.paciente), c.estado, sxT ? 'Sexo (pestaña CAMAS): ' + sxT : '', a ? 'Aislamiento: ' + c.aisl : '', c.pasa ? 'Pasa a cama: ' + c.pasa : ''].filter(Boolean).join('\n');
+  return `<div class="bed ${cls(c.estado)} ${a ? 'aisl' : ''}" data-tip="${esc(info)}"><div class="id">${esc(c.id)}${sx ? ` <span class="sx ${sx.sx}" title="${sxT}">${sx.sx}</span>` : ''}</div>
     <span class="st">${c.estado === 'OCUPADA' ? '' : esc(c.estado === 'SIN DATO' ? 's/d' : c.estado === 'RESERVADA' ? 'reservada' : c.estado.toLowerCase())}</span>
     <div class="pt">${c.reserva ? 'Reservada ' + esc(c.reserva) : nm(c.paciente)}</div>${a ? aislTag(c.aisl) : ''}${c.pasa ? ' <span class="tag p">→ ' + esc(c.pasa) + '</span>' : ''}</div>`;
 }
