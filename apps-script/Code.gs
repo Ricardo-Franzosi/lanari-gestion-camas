@@ -36,6 +36,11 @@ const CONFIG = {
   MAX_INTENTOS: 5,
   MAX_CODIGOS_POR_HORA: 4,
   NOMBRE_REMITENTE: 'Auditoría Médica y Gestión Hospitalaria Lanari',
+  // Registro de usuarios y copias diarias: hoja y carpeta privadas en el Drive del dueño del script (se crean con instalarRegistro).
+  ADMINS: ['franzosi.ricardo@lanari.uba.ar'],   // únicos que ven la sección Cambios del panel
+  COPIA_HORA: 7, COPIA_MINUTO: 0,               // copia diaria del tablero (camas + rechazos)
+  COPIA_HORAS: 24,                              // cada copia se conserva 24 h (queda solo la última)
+  INFORME_A: 'franzosi.ricardo@lanari.uba.ar',    // recibe a diario (7:00) los cambios del tablero y los ingresos de usuarios
 };
 
 function doGet() {
@@ -53,6 +58,9 @@ function doPost(e) {
       case 'logout': return json_(salir_(body.token));
       case 'estadisticas': return json_(estadisticas_(body.token));
       case 'facturacion': return json_(facturacion_(body.token));
+      case 'vista': return json_(vista_(body.token, body.vista, body.disp));
+      case 'copias': return json_(copias_(body.token));
+      case 'copia': return json_(copia_(body.token, body.fecha));
       default: return json_({ ok: false, error: 'accion_desconocida' });
     }
   } catch (err) {
@@ -141,8 +149,7 @@ function datos_(token) {
     try { hojas['RECHAZOS GUARDIA'] = SpreadsheetApp.openById(CONFIG.RECHAZOS_ID).getSheetByName('RECHAZOS').getDataRange().getDisplayValues(); }
     catch (err) { console.warn('Rechazos no disponibles: ' + err); }
   }
-  log_(email, 'consulta');
-  return { ok: true, email: email, generado: new Date().toISOString(), hojas: hojas, fotos: fotos_() };
+  return { ok: true, email: email, admin: esAdmin_(email), generado: new Date().toISOString(), hojas: hojas, fotos: fotos_() };
 }
 
 function fotos_() {
@@ -166,7 +173,6 @@ function estadisticas_(token) {
   if (!id) return { ok: false, error: 'estadisticas_no_configuradas' };
   const hojas = {};
   SpreadsheetApp.openById(id).getSheets().forEach(sh => { hojas[sh.getName()] = sh.getDataRange().getDisplayValues(); });
-  log_(email, 'estadisticas');
   return { ok: true, hojas: hojas };
 }
 
@@ -180,7 +186,6 @@ function facturacion_(token) {
   SpreadsheetApp.openById(CONFIG.FACT_ID).getSheets().forEach(sh => {
     hojas[sh.getName()] = sh.getDataRange().getValues().map(r => r.map(v => v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v));
   });
-  log_(email, 'facturacion');
   return { ok: true, hojas: hojas };
 }
 
@@ -301,11 +306,163 @@ function codigoAleatorio_() {
 function hash_(s) {
   return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s));
 }
-function log_(email, accion) {
+/* ---------- Registro de usuarios (hoja privada) ---------- */
+function registro_() {
+  const props = PropertiesService.getScriptProperties();
+  let id = props.getProperty('REG_ID'), ss = null;
+  if (id) try { ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; }
+  if (!ss) {
+    ss = SpreadsheetApp.create('Panel Lanari - registro de usuarios (privado)');
+    props.setProperty('REG_ID', ss.getId());
+    const sh = ss.getSheets()[0]; sh.setName('INGRESOS');
+    sh.appendRow(['Fecha y hora', 'Mail', 'Acción', 'Pestaña', 'Dispositivo']); sh.setFrozenRows(1);
+  }
+  return ss;
+}
+function log_(email, accion, pestana, disp) {
   try {
-    const hoja = SpreadsheetApp.openById(CONFIG.SHEET_ID).getSheetByName(CONFIG.HOJA_LOG);
-    if (hoja) hoja.appendRow([new Date(), email, accion]);
+    const sh = registro_().getSheetByName('INGRESOS');
+    sh.appendRow([Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd HH:mm:ss'), email, accion, pestana || '', disp || '']);
   } catch (err) { console.warn(err); }
+}
+function esAdmin_(email) { return CONFIG.ADMINS.indexOf(String(email || '').toLowerCase()) >= 0; }
+
+/** El panel avisa qué pestaña abre el usuario (una vez por pestaña cada 10 minutos). */
+function vista_(token, vista, disp) {
+  const email = sesion_(token);
+  if (!email) return { ok: false, error: 'sesion_vencida' };
+  const v = String(vista || '').replace(/[^a-z_]/gi, '').slice(0, 30);
+  if (!v) return { ok: true };
+  const c = CacheService.getScriptCache(), k = 'vis:' + token + ':' + v;
+  if (c.get(k)) return { ok: true };
+  c.put(k, '1', 600);
+  log_(email, 'vista', v, String(disp || '').slice(0, 20));
+  return { ok: true };
+}
+
+/** Arma la pestaña RESUMEN de la hoja de registro (se ejecuta con la copia diaria). */
+function resumenUsuarios() {
+  const ss = registro_(), v = ss.getSheetByName('INGRESOS').getDataRange().getDisplayValues().slice(1);
+  const hoy = Date.now(), d30 = Utilities.formatDate(new Date(hoy - 30 * 864e5), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd');
+  const NOM = { mapa: 'Mapa de camas', solicitud: 'Solicitud', movimientos: 'Movimientos', espera: 'Espera', indicadores: 'Indicadores', rechazos: 'Rechazos', estadisticas: 'Estadísticas', facturacion: 'Facturación PAMI', obrassociales: 'Facturación OS', cambios: 'Cambios' };
+  const U = {};
+  v.forEach(r => {
+    const [f, mail, acc, pes, disp] = r; if (!mail) return;
+    const u = U[mail] = U[mail] || { mail, primero: f, ultimo: '', ing: 0, ing30: 0, dias: new Set(), vistas: {}, disp: {} };
+    if (f > u.ultimo) u.ultimo = f; if (f < u.primero) u.primero = f;
+    if (acc === 'ingreso') { u.ing++; if (f >= d30) u.ing30++; }
+    if (acc === 'vista' || acc === 'ingreso') u.dias.add(f.slice(0, 10));
+    if (acc === 'vista' && pes) u.vistas[pes] = (u.vistas[pes] || 0) + 1;
+    if (disp) u.disp[disp] = (u.disp[disp] || 0) + 1;
+  });
+  const filas = Object.values(U).sort((a, b) => b.ultimo.localeCompare(a.ultimo)).map(u => [
+    u.mail, u.primero, u.ultimo, u.ing, u.ing30, u.dias.size,
+    Object.entries(u.vistas).sort((a, b) => b[1] - a[1]).map(([k, n]) => (NOM[k] || k) + ' (' + n + ')').join(', '),
+    Object.entries(u.disp).sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' (' + n + ')').join(', ')]);
+  let sh = ss.getSheetByName('RESUMEN'); if (!sh) sh = ss.insertSheet('RESUMEN', 0);
+  sh.clear();
+  const enc = ['Mail', 'Primer registro', 'Último movimiento', 'Ingresos (total)', 'Ingresos últimos 30 días', 'Días con uso', 'Pestañas vistas (veces)', 'Dispositivo'];
+  sh.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight('bold'); sh.setFrozenRows(1);
+  if (filas.length) sh.getRange(2, 1, filas.length, enc.length).setValues(filas);
+  sh.getRange(filas.length + 3, 1).setValue('Actualizado: ' + Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd HH:mm') + ' · el detalle de cada movimiento está en la pestaña INGRESOS');
+}
+
+/* ---------- Copias diarias del tablero (camas + rechazos) ---------- */
+function carpetaCopias_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('COPIAS_ID');
+  if (id) try { return DriveApp.getFolderById(id); } catch (e) {}
+  const f = DriveApp.createFolder('Panel Lanari - copias diarias del tablero (privado)');
+  props.setProperty('COPIAS_ID', f.getId());
+  return f;
+}
+/** Disparador diario: guarda el estado de la planilla de camas y de rechazos como JSON. */
+function copiaDiaria() {
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_ID), hojas = {};
+  ss.getSheets().forEach(sh => { if (CONFIG.HOJAS_EXCLUIDAS.indexOf(sh.getName()) < 0) hojas[sh.getName()] = sh.getDataRange().getDisplayValues(); });
+  try { hojas['RECHAZOS GUARDIA'] = SpreadsheetApp.openById(CONFIG.RECHAZOS_ID).getSheetByName('RECHAZOS').getDataRange().getDisplayValues(); } catch (e) { console.warn(e); }
+  const fecha = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd');
+  const carpeta = carpetaCopias_(), nombre = 'copia_' + fecha + '.json';
+  // Copia anterior (para el informe por mail)
+  let prev = null; const itp = carpeta.getFiles(); let fp = null;
+  while (itp.hasNext()) { const f = itp.next(); if (f.getName() !== nombre && /^copia_.*\.json$/.test(f.getName()) && (!fp || f.getDateCreated() > fp.getDateCreated())) fp = f; }
+  if (fp) try { prev = JSON.parse(fp.getBlob().getDataAsString()); } catch (e) { console.warn(e); }
+  const mismas = carpeta.getFilesByName(nombre); while (mismas.hasNext()) mismas.next().setTrashed(true);
+  carpeta.createFile(nombre, JSON.stringify({ fecha: fecha, generado: new Date().toISOString(), hojas: hojas }), 'application/json');
+  // Retención: se borran las copias con más de COPIA_HORAS (la nueva reemplaza a la del día anterior)
+  const limite = Date.now() - (CONFIG.COPIA_HORAS - 1) * 36e5, it = carpeta.getFiles();
+  while (it.hasNext()) { const f = it.next(); if (f.getName() !== nombre && f.getDateCreated().getTime() < limite) f.setTrashed(true); }
+  console.log('Copia guardada: ' + nombre);
+  try { resumenUsuarios(); } catch (e) { console.warn('Resumen usuarios: ' + e); }
+  try { enviarInforme_(prev, { fecha: fecha, hojas: hojas }); } catch (e) { console.warn('Informe: ' + e); }
+}
+
+/* ---------- Informe diario por mail ---------- */
+function enviarInforme_(prev, actual) {
+  const tz = 'America/Argentina/Buenos_Aires', e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const U = s => String(s || '').trim().toUpperCase();
+  const camasDe = h => { const m = {}; const rows = h['LISTADO DIARIO'] || []; let ok = false;
+    rows.forEach(r => { const a = U(r[0]); if (a === 'CAMAS') { ok = true; return; } if (!ok || !a || !U(r[2])) return; if (/PROGRAMADOS/.test(U(r[1]))) { ok = false; return; } if (!m[a]) m[a] = { pac: String(r[1] || '').trim(), est: U(r[2]), ais: U(r[3]) }; }); return m; };
+  const tabla = (tit, enc, filas) => `<h3 style="margin:18px 0 6px;font:600 15px Arial">${tit} (${filas.length})</h3>` + (filas.length
+    ? `<table style="border-collapse:collapse;font:13px Arial">${'<tr>' + enc.map(x => `<th style="text-align:left;border-bottom:1px solid #ccc;padding:4px 8px">${x}</th>`).join('') + '</tr>'}${filas.map(f => '<tr>' + f.map(x => `<td style="border-bottom:1px solid #eee;padding:4px 8px">${x}</td>`).join('') + '</tr>').join('')}</table>`
+    : '<p style="font:13px Arial;color:#777">Sin cambios.</p>');
+  let html = `<div style="font:14px Arial;color:#222"><h2 style="font:600 18px Arial;margin:0 0 4px">Auditoría Médica y Gestión Hospitalaria Lanari · informe diario</h2>
+    <p style="color:#666;margin:0">${Utilities.formatDate(new Date(), tz, 'dd/MM/yyyy HH:mm')}${prev ? ' · cambios desde la copia del ' + prev.fecha.split('-').reverse().join('/') : ' · primera copia: todavía no hay con qué comparar'}</p>`;
+  if (prev) {
+    const A = camasDe(prev.hojas), B = camasDe(actual.hojas), d = x => x ? e(x.est.toLowerCase()) + (x.pac ? ' · ' + e(x.pac) : '') + (x.ais && x.ais !== 'SIN AISLAMIENTO' && x.ais !== 'NO' ? ' · aisl.' : '') : '—';
+    const camas = [...new Set(Object.keys(A).concat(Object.keys(B)))].filter(k => !A[k] || !B[k] || A[k].est !== B[k].est || A[k].pac !== B[k].pac || A[k].ais !== B[k].ais).map(k => [`<b>${e(k)}</b>`, d(A[k]), d(B[k])]);
+    html += tabla('Camas con cambios', ['Cama', 'Antes', 'Ahora'], camas);
+    const ped = h => { const r = h['Pedidos'] || []; const H = (r[0] || []).map(U); const ix = n => H.findIndex(x => x.indexOf(n) >= 0);
+      const iT = ix('MARCA TEMPORAL') >= 0 ? ix('MARCA TEMPORAL') : ix('TIMESTAMP'), iN = ix('NOMBRE'), iO = ix('OBRA SOCIAL'), iI = ix('FECHA DE INGRESO'), iM = ix('MOTIVO');
+      return r.slice(1).filter(x => x.some(v => String(v).trim())).map(x => ({ k: x[iT] + '|' + x[iN], n: x[iN], os: x[iO], ing: x[iI], mot: x[iM] })); };
+    const pa = new Set(ped(prev.hojas).map(x => x.k));
+    html += tabla('Pedidos de internación nuevos', ['Paciente', 'Obra social', 'Ingreso', 'Motivo'], ped(actual.hojas).filter(x => !pa.has(x.k)).map(x => [e(x.n), e(x.os), e(x.ing), e(x.mot)]));
+    const rech = h => { const r = h['RECHAZOS GUARDIA'] || []; const H = (r[0] || []).map(U); const ix = n => H.indexOf(n);
+      return r.slice(1).map(x => ({ n: x[ix('N°')], f: x[ix('FECHA')] + ' ' + x[ix('HORA')], p: x[ix('PACIENTE')], m: x[ix('MOTIVO DEL RECHAZO')], d: x[ix('DÓNDE AGUARDABA')], est: x[ix('ESTADO')] })).filter(x => x.n); };
+    const ra = {}; rech(prev.hojas).forEach(x => ra[x.n] = x);
+    const rb = rech(actual.hojas);
+    html += tabla('Rechazos de guardia nuevos', ['N°', 'Fecha', 'Paciente', 'Motivo', 'Dónde aguardaba'], rb.filter(x => !ra[x.n]).map(x => [e(x.n), e(x.f), e(x.p), e(x.m), e(x.d || '—')]));
+    const rc = rb.filter(x => ra[x.n] && (ra[x.n].est !== x.est || ra[x.n].d !== x.d)).map(x => [e(x.n), e(x.p), e(ra[x.n].est + (ra[x.n].d ? ' · ' + ra[x.n].d : '')), e(x.est + (x.d ? ' · ' + x.d : ''))]);
+    if (rc.length) html += tabla('Rechazos modificados', ['N°', 'Paciente', 'Antes', 'Ahora'], rc);
+  }
+  // Ingresos de usuarios desde el informe anterior (sin repetir lo ya informado)
+  const props = PropertiesService.getScriptProperties(), ahora = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+  const desde = props.getProperty('INFORME_DESDE') || Utilities.formatDate(new Date(Date.now() - 864e5), tz, 'yyyy-MM-dd HH:mm:ss');
+  const v = registro_().getSheetByName('INGRESOS').getDataRange().getDisplayValues().slice(1).filter(r => r[0] > desde && r[0] <= ahora && r[1]);
+  const NOM = { mapa: 'Mapa', solicitud: 'Solicitud', movimientos: 'Movimientos', espera: 'Espera', indicadores: 'Indicadores', rechazos: 'Rechazos', estadisticas: 'Estadísticas', facturacion: 'Fact. PAMI', obrassociales: 'Fact. OS', cambios: 'Cambios' };
+  const U2 = {};
+  v.forEach(r => { const u = U2[r[1]] = U2[r[1]] || { ing: 0, prim: r[0], ult: r[0], vis: {}, disp: r[4] || '' }; if (r[2] === 'ingreso') u.ing++; if (r[0] < u.prim) u.prim = r[0]; if (r[0] > u.ult) u.ult = r[0]; if (r[2] === 'vista' && r[3]) u.vis[r[3]] = 1; if (r[4]) u.disp = r[4]; });
+  html += tabla('Usuarios que usaron el panel desde el informe anterior', ['Mail', 'Ingresos', 'Primer / último movimiento', 'Pestañas vistas', 'Dispositivo'],
+    Object.entries(U2).sort((a, b) => b[1].ult.localeCompare(a[1].ult)).map(([m, u]) => [e(m), u.ing, e(u.prim.slice(11, 16) + ' – ' + u.ult.slice(11, 16) + (u.prim.slice(0, 10) !== u.ult.slice(0, 10) ? ' (' + u.prim.slice(8, 10) + '/' + u.prim.slice(5, 7) + '→' + u.ult.slice(8, 10) + '/' + u.ult.slice(5, 7) + ')' : '')), e(Object.keys(u.vis).map(k => NOM[k] || k).join(', ') || '—'), e(u.disp || '—')]));
+  html += `<p style="font:12px Arial;color:#777;margin-top:18px">Registro completo: <a href="${registro_().getUrl()}">Panel Lanari - registro de usuarios</a> · Panel: https://ricardo-franzosi.github.io/lanari-gestion-camas/</p></div>`;
+  MailApp.sendEmail({ to: CONFIG.INFORME_A, subject: 'Informe diario del tablero Lanari · ' + Utilities.formatDate(new Date(), tz, 'dd/MM/yyyy'), htmlBody: html, name: CONFIG.NOMBRE_REMITENTE });
+  props.setProperty('INFORME_DESDE', ahora);
+}
+function copias_(token) {
+  const email = sesion_(token);
+  if (!email) return { ok: false, error: 'sesion_vencida' };
+  if (!esAdmin_(email)) return { ok: false, error: 'sin_permiso' };
+  const it = carpetaCopias_().getFiles(), fechas = [];
+  while (it.hasNext()) { const m = it.next().getName().match(/^copia_(\d{4}-\d{2}-\d{2})\.json$/); if (m) fechas.push(m[1]); }
+  return { ok: true, fechas: fechas.sort().reverse() };
+}
+function copia_(token, fecha) {
+  const email = sesion_(token);
+  if (!email) return { ok: false, error: 'sesion_vencida' };
+  if (!esAdmin_(email)) return { ok: false, error: 'sin_permiso' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return { ok: false, error: 'fecha_invalida' };
+  const it = carpetaCopias_().getFilesByName('copia_' + fecha + '.json');
+  if (!it.hasNext()) return { ok: false, error: 'sin_copia' };
+  log_(email, 'cambios', fecha);
+  return Object.assign({ ok: true }, JSON.parse(it.next().getBlob().getDataAsString()));
+}
+/** Ejecutar una vez: crea la hoja de registro, la carpeta de copias, el disparador diario y la primera copia. */
+function instalarRegistro() {
+  registro_(); carpetaCopias_();
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'copiaDiaria').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('copiaDiaria').timeBased().everyDays(1).atHour(CONFIG.COPIA_HORA).nearMinute(CONFIG.COPIA_MINUTO).inTimezone('America/Argentina/Buenos_Aires').create();
+  copiaDiaria();
+  console.log('Registro: ' + registro_().getUrl());
 }
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
