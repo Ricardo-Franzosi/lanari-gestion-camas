@@ -23,7 +23,7 @@ const RCFG = {
 };
 
 // Base histórica: archivo depurado en Drive (xlsx, pestaña "Rechazos"). Se importa una sola vez en `instalar`.
-const SEED_FILE_ID = '1vwS1VJoa3dH5l49wsS85-ZqXTXrXgObe';
+const SEED_FILE_ID = PropertiesService.getScriptProperties().getProperty('SEED_FILE_ID') || ''; // base inicial (ya importada); el ID no se publica
 
 /* ================= Instalación ================= */
 function instalar() {

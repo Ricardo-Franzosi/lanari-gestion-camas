@@ -11,22 +11,23 @@
  * La URL es pública, pero sin código válido no entrega datos.
  */
 
+// Los identificadores de planillas, carpetas y archivos NO están en este archivo (el repositorio es público):
+// se guardan en Propiedades del script (clave IDS, JSON) dentro del proyecto de Apps Script.
+const IDS = (() => { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('IDS') || '{}'); } catch (e) { return {}; } })();
+
 const CONFIG = {
-  SHEET_ID: '1L19hyfd_YLGOj_i8JP092XHVeFHASh973aiVOFMozew',
-  RECHAZOS_ID: '1qLReNN5bl_zUT3ul8DCuk-BKhg7jiGihm4h56LjlxwM', // hoja "Rechazos guardia Lanari" (cuenta del Lanari, compartida en lectura)
-  // Estadísticas: planillas del Departamento de Estadística (recopiladas por Corina Páez) compartidas por Drive.
-  // Solo se leen estas carpetas (no se toca ningún otro archivo de Drive).
-  ESTAD_CARPETAS: ['1Y7Q5ZOh1NXoGuuYXa_bHGCmNSQpRxc2S', '1XEHbFk3d0JQHLgMr-wigKKwhSipOugrY', '1IsmuQLEc8Re3LoM30PFHKvvhX0NNNNvR'], // Est. especialidad 2024 / 2025 / 2026
-  ESTAD_EXTRA: [{ anio: 2024, id: '1R_xKkRv2sf24LNLkEFC-lG3WiGnC4IIyZVXUhljhHbQ', titulo: 'Estadisticas 2024 (base para panel)' }],
+  SHEET_ID: IDS.SHEET_ID,          // planilla de Admisión (SOLICITUD DE CAMAS PARA INTERNACIÓN)
+  RECHAZOS_ID: IDS.RECHAZOS_ID,    // hoja "Rechazos guardia Lanari"
+  // Estadísticas: carpetas "Est. especialidad 2024 / 2025 / 2026" (Corina Páez) y la planilla base 2024.
+  ESTAD_CARPETAS: IDS.ESTAD_CARPETAS || [],
+  ESTAD_EXTRA: IDS.ESTAD_EXTRA || [],
   ESTAD_HORA: 6,
-  // Facturación PAMI: hoja privada "Panel Lanari - datos Facturación PAMI" dentro de la carpeta privada
-  // "Facturación PAMI Lanari (privado)" (Drive del dueño del script). Se entrega solo con sesión iniciada.
+  // Facturación PAMI: hoja privada "Panel Lanari - datos Facturación PAMI" y carpeta "Facturación PAMI Lanari (privado)".
   // Pestañas: FAC_LIQ, FAC_FACT, FAC_MOD, REC_LAB, REC_OPS, LIBRO, REC_RECH, META.
-  FACT_ID: '1MEdhpEyWkMh3Z2tkSP7wCHRMzU94IJ7HIrojWH4wt70',
-  FACT_CARPETA: '1dMFcYv8zxtrMiFOMJeOfZxwLAw8jcBGK',   // donde la verificación mensual deja portal_pami_AAAAMM.xlsx
-  GESTION_ID: '1f7Je4RKCG34MiMRqV2OblMQC2cHstppuF8OMZAnpUVo', // planilla "gestion" de Cobranzas (facturas emitidas)
-  // Fotos de las responsables de cada área (archivo privado en el Drive del dueño del script; no está en el repositorio).
-  FOTOS_ID: '14SQrQ2t8oH2mW_ZMnAkJjiUE0WSJZyHV',
+  FACT_ID: IDS.FACT_ID,
+  FACT_CARPETA: IDS.FACT_CARPETA,  // donde la verificación mensual deja portal_pami_AAAAMM.xlsx
+  GESTION_ID: IDS.GESTION_ID,      // planilla "gestion" de Cobranzas (facturas emitidas)
+  FOTOS_ID: IDS.FOTOS_ID,          // fotos de las responsables (archivo privado)
   DOMINIO: 'lanari.uba.ar',
   HOJA_ACCESO: 'ACCESO',          // opcional: lista blanca de mails en la columna A
   HOJA_LOG: 'LOG ACCESOS',        // opcional: si existe, se registran ingresos y consultas
