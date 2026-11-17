@@ -221,7 +221,8 @@ function actualizarEstadisticas(forzar) {
   const porTitulo = {};
   archivos.forEach(a => { const k = a.titulo.toLowerCase(); if (!porTitulo[k] || a.mod > porTitulo[k].mod) porTitulo[k] = a; });
   const lista = Object.values(porTitulo).sort((a, b) => a.titulo.localeCompare(b.titulo));
-  CONFIG.ESTAD_EXTRA.forEach(x => lista.unshift({ id: x.id, titulo: x.titulo, mod: DriveApp.getFileById(x.id).getLastUpdated(), tipo: 'general', gsheet: true, anio: x.anio }));
+  // La planilla base de un año se usa solo si en las carpetas no hay un "Estadisticas AAAA.xlsx" de ese año.
+  CONFIG.ESTAD_EXTRA.filter(x => !lista.some(a => a.tipo === 'general' && a.titulo.indexOf(String(x.anio)) >= 0)).forEach(x => lista.unshift({ id: x.id, titulo: x.titulo, mod: DriveApp.getFileById(x.id).getLastUpdated(), tipo: 'general', gsheet: true, anio: x.anio }));
   const meta = [['Pestaña', 'Tipo', 'Año', 'Archivo', 'Hoja', 'Modificado', 'Sincronizado']];
   const usadas = new Set(['EST_META']);
   lista.forEach(a => {
