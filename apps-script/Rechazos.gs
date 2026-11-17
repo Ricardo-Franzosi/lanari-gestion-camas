@@ -267,7 +267,7 @@ function esDuplicado_(sh, d, fecha, tz) {
  */
 function auditarHistorico() { return revisarHistorico_(false); }
 function recuperarFaltantes() { return revisarHistorico_(true); }
-function revisarHistorico_(escribir) {
+function revisarHistorico_(escribir, filtro) {
   const DESDE = '2026/01/01';
   const props = PropertiesService.getScriptProperties();
   const ss = SpreadsheetApp.openById(props.getProperty('SHEET_ID'));
@@ -302,6 +302,7 @@ function revisarHistorico_(escribir) {
     if (ths.length < 100) break;
   }
   faltan.sort((a, b) => a.m.getDate() - b.m.getDate());
+  if (filtro) faltan.splice(0, faltan.length, ...faltan.filter(filtro)); // para recuperar solo los confirmados
   console.log('Rechazos en Gmail que no están en la hoja: ' + faltan.length);
   faltan.forEach(f => console.log(Utilities.formatDate(f.m.getDate(), tz, 'dd/MM/yyyy HH:mm') + ' · ' + (f.d.paciente || '(sin nombre)') + ' · ' + (f.d.dni || 's/DNI') + ' · ' + f.d.cat + ' · asunto: ' + f.asunto));
   if (escribir && faltan.length) {
