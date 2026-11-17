@@ -323,7 +323,7 @@ const L = (() => {
           const x = rows[j] || [];
           if (!x.some(v => norm(v))) break;
           if (up(x[2]) === 'SIN PACIENTES' && !norm(x[1])) continue;
-          programados.push({ cama: norm(x[0]), paciente: norm(x[1]), estado: up(x[2]), aisl: up(x[3]) });
+          programados.push({ proc: norm(x[0]), paciente: norm(x[1]), estado: up(x[2]), sector: up(x[3]), cama: norm(x[4]) });
         }
         break;
       }
@@ -1145,7 +1145,7 @@ function vMapa() {
     </div>`;
   }).join('');
   const otras = DATA.camas.otras.length ? `<div class="warn">Camas en la planilla que no están en la matriz: ${DATA.camas.otras.map(c => esc(c.id)).join(', ')}</div>` : '';
-  const prog = DATA.listado.programados.length ? `<div class="card"><h2>Programados con cama asignada ocupada</h2><table><tr><th>Cama</th><th>Paciente</th><th>Estado</th></tr>${DATA.listado.programados.map(p => `<tr><td class="mono">${esc(p.cama)}</td><td>${nm(p.paciente)}</td><td>${esc(p.estado)}</td></tr>`).join('')}</table></div>` : '';
+  const prog = DATA.listado.programados.length ? `<div class="card"><h2>Programados con cama asignada ocupada</h2><table><tr><th>Cama asignada</th><th>Paciente</th><th>Estado</th><th>Sector</th><th>Procedimiento</th></tr>${DATA.listado.programados.map(p => `<tr><td class="mono"><b>${p.cama ? esc(p.cama) : '<span class="muted">sin asignar</span>'}</b></td><td>${nm(p.paciente)}</td><td>${p.estado === 'LIBERE LA CAMA' && p.cama ? `<span class="tag w">Liberar cama ${esc(p.cama)}</span>` : esc(p.estado)}</td><td>${esc(p.sector)}</td><td>${esc(p.proc)}</td></tr>`).join('')}</table></div>` : '';
   const listOk = DATA.listado.ok ? '' : '<div class="warn">No encontré la pestaña LISTADO DIARIO con el formato esperado: el mapa puede estar vacío.</div>';
   const freeRows = DATA.camas.sect.map(s => { const f = s.grupos.flatMap(g => g.camas).filter(c => c.estado === 'LIBRE');
     return `<div class="row"><span class="lbl">${esc(s.nombre)} <b>(${f.length})</b></span>${f.length ? f.map(c => `<span class="chip ${c.aisl && c.aisl !== 'SIN AISLAMIENTO' ? 'a' : ''}" title="${c.aisl && c.aisl !== 'SIN AISLAMIENTO' ? 'Libre con aislamiento: ' + esc(c.aisl) : 'Libre'}">${esc(c.id)}</span>`).join('') : '<span class="empty">sin camas libres</span>'}</div>`; }).join('');
