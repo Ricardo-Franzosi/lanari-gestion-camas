@@ -902,7 +902,8 @@ function bookFromWorkbook(wb) {
 }
 function load(book, src, when) {
   document.body.classList.add('auth');
-  DATA = L.analizar(book); SRC = src;
+  DATA = L.analizar(book); SRC = src; BOOK = book;
+  if (FACT && FACT._raw) FACT = parseFact(FACT._raw); // recalcular el cruce con la hoja de rechazos actual
   when = when ? new Date(when) : new Date();
   $('#fresh').innerHTML = esc(src) + ' · ' + when.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   render();
@@ -1403,7 +1404,76 @@ function bindRech() {
 }
 
 /* ---------- Facturación PAMI (hoja privada servida por el Apps Script; responsable Griselda Rios) ---------- */
-let FACT = null, factCargando = false, factError = '';
+let FACT = null, factCargando = false, factError = '', BOOK = null;
+// Mismo cruce que hace el script cada mañana (apps-script/Code.gs), recalculado acá con la hoja de rechazos en vivo:
+// así el valor de cada rechazo no depende de que el N° de la fila coincida con el de la copia de las 7:30.
+/** Cruce rechazos ↔ OP de recupero (módulo 69). Función pura: recibe y devuelve matrices de valores. */
+function construirRecRech_(opsV, guardiaV, libroV) {
+  // Las celdas con fecha llegan como Date: pasarlas a texto AAAA-MM-DD antes de comparar períodos
+  const p2 = n => String(n).padStart(2, '0');
+  const sinFechas = M => (M || []).map(r => r.map(v => v instanceof Date ? v.getFullYear() + '-' + p2(v.getMonth() + 1) + '-' + p2(v.getDate()) : v));
+  opsV = sinFechas(opsV); guardiaV = sinFechas(guardiaV); libroV = sinFechas(libroV);
+  const z = s => String(s == null ? '' : s).replace(/^0+/, '');
+  const ymI = p => +p.slice(0, 4) * 12 + +p.slice(5, 7);
+  const perTxt = p => p.slice(5, 7) + '/' + p.slice(0, 4);
+  const num = v => typeof v === 'number' ? v : Number(String(v || '0').replace(',', '.')) || 0;
+  const ed1 = (a, b) => { if (a === b) return true; if (Math.abs(a.length - b.length) > 1) return false; let i = 0, j = 0, d = 0;
+    while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++d > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } }
+    return d + (a.length - i) + (b.length - j) <= 1; };
+  const H = opsV[0] || []; const ix = k => H.indexOf(k);
+  const ops = opsV.slice(1).filter(r => r[0] !== '' && r[0] != null).map(r => ({ op: String(r[ix('op')]), ben: z(r[ix('beneficio')]), per: String(r[ix('periodo_prest')]).slice(0, 7), prest: String(r[ix('prestador')]),
+    mt: num(r[ix('monto_recupero')]), cg: num(r[ix('cargo_adm')]), lq: String(r[ix('liquidaciones')] || ''), pazNom: String(r[ix('paciente_planilla_paez')] || ''), pazNota: String(r[ix('nota_planilla_paez')] || '') }));
+  const maxPer = ops.map(o => o.per).sort().pop() || '';
+  const byB = {}; ops.forEach(o => (byB[o.ben] = byB[o.ben] || []).push(o)); const keys = Object.keys(byB);
+  const buscar = (nb, ym) => { // OP del beneficiario en el mes del rechazo ±1
+    if (!nb) return []; let c = byB[nb];
+    if (!c) { const ks = keys.filter(k => ed1(k, nb)); if (ks.length === 1) c = byB[ks[0]]; }
+    if (!c || !ym) return []; const m = ymI(ym); return c.filter(o => Math.abs(ymI(o.per) - m) <= 1);
+  };
+  // Hoja de rechazos de guardia
+  const hi = guardiaV.findIndex(r => r.some(v => /categor[ií]a de motivo/i.test(String(v))));
+  const gh = hi >= 0 ? guardiaV[hi].map(String) : []; const gc = re => gh.findIndex(h => re.test(h));
+  const G = hi < 0 ? [] : guardiaV.slice(hi + 1).filter(r => r[gc(/^N°/)] !== '' && r[gc(/^N°/)] != null).map(r => {
+    let f = String(r[gc(/^Fecha/i)] || ''); const m = f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) f = m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    const bRaw = String(r[gc(/benef/i)] || '').replace(/[^0-9/]/g, '');
+    const nb = bRaw.includes('/') ? bRaw.split('/')[0] : (bRaw.length >= 13 ? bRaw.slice(0, -2) : bRaw);
+    return { n: String(r[gc(/^N°/)]), fecha: f.slice(0, 10), pac: String(r[gc(/^Paciente/i)] || ''), ben: z(nb), motivo: String(r[gc(/^Motivo del/i)] || ''), estado: String(r[gc(/^Estado/i)] || ''), vig: /^vigente$/i.test(String(r[gc(/^Estado/i)] || '').trim()) };
+  });
+  const LBh = (libroV[0] || []).map(String); const lc = k => LBh.indexOf(k);
+  const LB = libroV.slice(1).filter(r => r[lc('mes')]).map(r => ({ fecha: String(r[lc('fecha')]).slice(0, 10), mes: String(r[lc('mes')]).slice(0, 7), pac: String(r[lc('paciente')] || ''),
+    ben: z(String(r[lc('beneficio')] || '').replace(/[^0-9/]/g, '').split('/')[0]), motivo: String(r[lc('motivo')] || '') }));
+  // OP → rechazos que la explican
+  const gOp = {}, lOp = {};
+  G.forEach((g, i) => buscar(g.ben, g.fecha.slice(0, 7)).forEach(o => (gOp[o.op] = gOp[o.op] || []).push(i)));
+  LB.forEach((l, i) => buscar(l.ben, l.mes).forEach(o => (lOp[o.op] = lOp[o.op] || []).push(i)));
+  // Episodios: mismo beneficiario y prestador en meses consecutivos (PAMI emite una OP por mes de internación)
+  const grupos = {}; ops.forEach(o => (grupos[o.ben + '|' + o.prest] = grupos[o.ben + '|' + o.prest] || []).push(o));
+  const epis = [];
+  Object.values(grupos).forEach(lst => { lst.sort((a, b) => ymI(a.per) - ymI(b.per)); let cur = [lst[0]];
+    lst.slice(1).forEach(o => { if (ymI(o.per) - ymI(cur[cur.length - 1].per) <= 1) cur.push(o); else { epis.push(cur); cur = [o]; } }); epis.push(cur); });
+  const out = [['tipo_fila', 'clasificacion', 'n_rechazo_guardia', 'fecha_rechazo', 'paciente', 'beneficio', 'motivo', 'prestador_que_interno', 'meses_internado', 'prestacion_desde', 'prestacion_hasta', 'op_inicial', 'ops', 'monto_recupero', 'cargo_adm', 'costo_total', 'liquidaciones', 'nota']];
+  const usedG = new Set(), usedL = new Set();
+  epis.forEach(e => {
+    const ngs = [...new Set(e.flatMap(o => (gOp[o.op] || []).filter(i => G[i].vig)))].sort((a, b) => a - b);
+    const nls = [...new Set(e.flatMap(o => lOp[o.op] || []))].sort((a, b) => a - b);
+    ngs.forEach(i => usedG.add(i)); nls.forEach(i => usedL.add(i));
+    const clas = ngs.length ? 'Rechazo conformado (guardia 2026)' : nls.length ? 'Rechazo registrado en libro de guardia' : 'Sin rechazo conformado (de oficio u otro)';
+    let r0 = null; for (const o of e) { const g = (gOp[o.op] || []).filter(i => G[i].vig); if (g.length) { r0 = G[Math.min(...g)]; break; } const l = lOp[o.op] || []; if (l.length) { r0 = LB[Math.min(...l)]; break; } }
+    const mt = e.reduce((s, o) => s + o.mt, 0), cg = e.reduce((s, o) => s + o.cg, 0);
+    const nota = [];
+    if (!r0 && mt < 70000) nota.push('Monto menor (< $70.000)');
+    if (!r0 && /^no se envio/i.test(e[0].pazNota)) nota.push('Planilla C. Páez: no se envió rechazo desde el Instituto');
+    out.push(['Con recupero', clas, ngs.map(i => G[i].n).join(', '), r0 ? r0.fecha : '', r0 ? r0.pac : e[0].pazNom, e[0].ben, r0 ? r0.motivo : '', e[0].prest, e.length, perTxt(e[0].per), perTxt(e[e.length - 1].per),
+      e[0].op, e.map(o => o.op).join(' '), Math.round(mt * 100) / 100, Math.round(cg * 100) / 100, Math.round((mt + cg) * 100) / 100, e.map(o => o.lq).join(' '), nota.join('; ')]);
+  });
+  G.forEach((g, i) => { if (usedG.has(i)) return;
+    const nota = maxPer && g.fecha.slice(0, 7) > maxPer ? 'Aún no liquidable (portal hasta prestación ' + perTxt(maxPer) + ')' : !g.ben ? 'Sin nº de beneficio' : 'Sin OP de recupero en el portal';
+    out.push(['Sin recupero', 'Rechazo guardia 2026 (' + g.estado + ')', g.n, g.fecha, g.pac, g.ben, g.motivo, '', 0, '', '', '', '', 0, 0, 0, '', nota]); });
+  LB.forEach((l, i) => { if (usedL.has(i) || l.mes >= '2026') return;
+    out.push(['Sin recupero', 'Rechazo libro de guardia 2025', '', l.fecha, l.pac, l.ben, l.motivo, '', 0, '', '', '', '', 0, 0, 0, '', 'Sin OP de recupero en el portal']); });
+  return out;
+}
+
 let FF = { sub: 'general', anio: 'all', espOrden: 'total', espAbierta: null, rClas: 'all', rAnio: 'all', rQ: '', rTodos: false };
 const fmtM = n => n == null || isNaN(n) ? '—' : '$ ' + Math.round(n).toLocaleString('es-AR');
 const fmtMM = n => n == null || isNaN(n) ? '—' : '$ ' + (n / 1e6).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' M';
@@ -1435,7 +1505,10 @@ function parseFact(h) {
   const fac = tablaObj(h.FAC_FACT).map(r => ({ fecha: String(r.fecha_envio).slice(0, 10), tipo: r.tipo, num: r.numero, imp: numF(r.importe), pago: String(r.fecha_pago || ''), deb: numF(r.debito), dc: r.es_capita_dc === 'SI' }));
   const mod = tablaObj(h.FAC_MOD).map(r => ({ per: perYM(r.periodo_liq), prest: perYM(r.periodo_prest), grupo: r.grupo, modulo_cod: String(r.modulo_cod), modulo: r.modulo, imp: numF(r.importe) }));
   const lab = tablaObj(h.REC_LAB).map(r => ({ per: perYM(r.periodo_liq), mod: String(r.modulo_cod), nom: r.modulo, ops: numF(r.ops_listadas), list: numF(r.monto_listado), deb: numF(r.debito_recuperos_liquidado), cargo: numF(r.cargo_adm_liquidado) }));
-  const rech = tablaObj(h.REC_RECH).map(r => ({ tipo: r.tipo_fila, clas: r.clasificacion, nros: String(r.n_rechazo_guardia || '').split(',').map(s => s.trim()).filter(Boolean), fecha: String(r.fecha_rechazo || '').slice(0, 10),
+  const rawRech = BOOK && (BOOK['RECHAZOS GUARDIA'] || BOOK['RECHAZOS']);
+  let recRech = h.REC_RECH;
+  if (rawRech && rawRech.length > 1 && h.REC_OPS && h.REC_OPS.length > 1) { try { recRech = construirRecRech_(h.REC_OPS, rawRech, h.LIBRO || [[]]); } catch (e) { console.warn('cruce rechazos: ' + e); } }
+  const rech = tablaObj(recRech).map(r => ({ tipo: r.tipo_fila, clas: r.clasificacion, nros: String(r.n_rechazo_guardia || '').split(',').map(s => s.trim()).filter(Boolean), fecha: String(r.fecha_rechazo || '').slice(0, 10),
     pac: String(r.paciente || ''), ben: String(r.beneficio || ''), motivo: String(r.motivo || ''), prest: String(r.prestador_que_interno || ''), meses: numF(r.meses_internado), desde: perYM(r.prestacion_desde || ''), hasta: perYM(r.prestacion_hasta || ''),
     op: String(r.op_inicial || ''), ops: String(r.ops || ''), monto: numF(r.monto_recupero), cargo: numF(r.cargo_adm), costo: numF(r.costo_total), liqs: String(r.liquidaciones || ''), nota: String(r.nota || '') }));
   const meta = {}; tablaObj(h.META).forEach(r => meta[r.clave] = r.valor);
@@ -1443,7 +1516,7 @@ function parseFact(h) {
   // Valor por N° de rechazo de guardia (el episodio puede reunir varios rechazos del mismo paciente)
   const porNro = {}; rech.filter(r => r.tipo === 'Con recupero').forEach(r => r.nros.forEach(n => porNro[n] = r));
   const sinNro = {}; rech.filter(r => r.tipo === 'Sin recupero').forEach(r => r.nros.forEach(n => sinNro[n] = r));
-  return { liq, fac, mod, lab, rech, meta, porNro, sinNro, os: parseOS(h) };
+  return { liq, fac, mod, lab, rech, meta, porNro, sinNro, os: parseOS(h), _raw: h };
 }
 async function cargarFact() {
   if (factCargando || FACT || !API || !SES) return;
