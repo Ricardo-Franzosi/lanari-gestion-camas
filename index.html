@@ -79,7 +79,7 @@ main{padding:18px 20px 40px;max-width:1500px;margin:0 auto}
 .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px}
 .tag.a{background:var(--aisl);color:#fff}
 .tag.p{background:var(--pase);color:#fff}
-.sx{display:inline-block;font:700 10px/15px system-ui,sans-serif;width:15px;text-align:center;border-radius:50%;color:#fff;vertical-align:1px}.sx.F{background:#c2569b}.sx.M{background:#3a72c4}.sx.X{background:#7a6aa8;width:auto;padding:0 5px;border-radius:8px}
+.sx{display:inline-block;font:700 10px/15px system-ui,sans-serif;width:15px;text-align:center;border-radius:50%;color:#fff;vertical-align:1px}.sx.F{background:#c2569b}.sx.M{background:#3a72c4}.sx.X{background:#7a6aa8;width:auto;padding:0 5px;border-radius:8px}.sx.para{width:auto;padding:0 5px;border-radius:8px}.sx.D{background:#999}.sx.R,.sx.inc{background:#c0392b}
 .tag.w{background:#fdf1dc;color:#8a5a12}
 .tag.g{background:#e3f4ea;color:#17673f}
 .tag.r{background:#fbe5e2;color:#9b2c20}
@@ -1162,7 +1162,17 @@ function vMapa() {
       <span style="--c:#1f8a5b;">Libre</span><span style="--c:var(--ocup-bg)">Ocupada</span><span style="--c:var(--alta-bg)">Alta / libera cama</span>
       <span style="--c:var(--pase-bg)">Pase</span><span style="--c:#eaf2fb">Reservada (Hemodinamia / Trasplante)</span><span style="--c:var(--esp-bg)">Esperando cama / ing. cancelado</span><span class="lg-aisl" style="--c:#fff">Borde rojo = aislamiento</span></div>
     <div class="sectors">${sects}</div>${prog}
-    <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (incluye D1–D2 Hemodinamia, D3–D4 Internación general y D5–D6 Trasplante, según la pestaña CAMAS) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. <span class="sx F">F</span> / <span class="sx M">M</span>: sexo del paciente según la columna SEXO de la pestaña CAMAS. <span class="sx X">F/M</span>: cama libre de UTI, mixta (cualquier sexo).</p>`;
+    <p class="note">Fuente: pestaña LISTADO DIARIO. Matriz Alephoo de 58 camas: 29 en el 1º piso (con UBE), 21 en el 2º piso (incluye D1–D2 Hemodinamia, D3–D4 Internación general y D5–D6 Trasplante, según la pestaña CAMAS) y 8 en UTI (U1–U6, 31 y 32). Guardia no cuenta en la matriz. <span class="sx F">F</span> / <span class="sx M">M</span>: sexo del paciente según la columna SEXO de la pestaña CAMAS. <span class="sx X">F/M</span>: cama libre de UTI, mixta (cualquier sexo). En camas libres de piso: <span class="sx F para">p/F</span> / <span class="sx M para">p/M</span> según el sexo de quien ocupa la habitación, <span class="sx D">?</span> habitación vacía (a definir), <span class="sx R">!</span> pacientes de distinto sexo en la misma habitación (revisar). Habitaciones según el esquema de Admisión.</p>`;
+}
+// Habitaciones (machete de Paula Appugliese, 17/11/2026). D1–D2 y D5–D6 quedan fuera: reservadas.
+const HABITACIONES = [['100','101','102'],['103','104','105'],['106','107','108'],['109','110','111'],['112','113','114'],['115','116','117'],
+  ['94','95'], // H–K y UBE (77–81): pendientes de confirmar con Admisión
+
+  ['19','20'],['21','22'],['23','24'],['25','26','27'],['28','29','30'],['D3','D4'],['D','E','F']];
+function sexoHabitacion(id) {
+  const hab = HABITACIONES.find(h => h.includes(id)); if (!hab || !DATA) return null;
+  const sxs = new Set(hab.filter(x => { const l = DATA.listado.camas[x], q = DATA.sexo && DATA.sexo[x]; return l && l.estado !== 'LIBRE' && q && q.pac; }).map(x => DATA.sexo[x].sx));
+  return { hab, sx: sxs.size === 1 ? [...sxs][0] : sxs.size ? 'INC' : '' };
 }
 function bed(c) {
   const a = c.aisl && c.aisl !== 'SIN AISLAMIENTO';
@@ -1170,9 +1180,14 @@ function bed(c) {
   let sx = DATA && DATA.sexo && DATA.sexo[c.id];
   if (sx && libre && !sx.pac) sx = null; // cama libre: el SEXO de la pestaña CAMAS es del paciente anterior
   if (uti && libre) sx = { sx: 'X' };
-  const sxT = sx ? (sx.sx === 'F' ? 'Femenino' : sx.sx === 'M' ? 'Masculino' : 'Mixta (cualquier sexo)') : '';
+  const sh = !uti ? sexoHabitacion(c.id) : null;
+  if (sh && libre) sx = sh.sx === 'INC' ? { sx: 'R' } : sh.sx ? { sx: sh.sx, para: true } : { sx: 'D' };
+  const inc = sh && sh.sx === 'INC';
+  if (inc && sx && sx.sx !== 'R') sx = { ...sx, inc: true };
+  const sxT = !sx ? '' : sx.sx === 'X' ? 'Mixta (cualquier sexo)' : sx.sx === 'D' ? 'Habitación vacía: sexo a definir' : sx.sx === 'R' ? 'Revisar: pacientes de distinto sexo en la habitación'
+    : (sx.para ? 'Libre para ' : '') + (sx.sx === 'F' ? 'Femenino' : 'Masculino') + (sx.para ? ' (habitación ' + sh.hab.join('-') + ')' : '') + (sx.inc ? ' · revisar: distinto sexo en la habitación ' + sh.hab.join('-') : '');
   const info = [c.id, c.paciente && (PRIV ? nm(c.paciente) : c.paciente), c.estado, sxT ? 'Sexo (pestaña CAMAS): ' + sxT : '', a ? 'Aislamiento: ' + c.aisl : '', c.pasa ? 'Pasa a cama: ' + c.pasa : ''].filter(Boolean).join('\n');
-  return `<div class="bed ${cls(c.estado)} ${a ? 'aisl' : ''}" data-tip="${esc(info)}"><div class="id">${esc(c.id)}${sx ? ` <span class="sx ${sx.sx}" title="${sxT}">${sx.sx === 'X' ? 'F/M' : sx.sx}</span>` : ''}</div>
+  return `<div class="bed ${cls(c.estado)} ${a ? 'aisl' : ''}" data-tip="${esc(info)}"><div class="id">${esc(c.id)}${sx ? ` <span class="sx ${sx.sx}${sx.para ? ' para' : ''}${sx.inc ? ' inc' : ''}" title="${sxT}">${({ X: 'F/M', D: '?', R: '!' })[sx.sx] || (sx.para ? 'p/' + sx.sx : sx.sx)}</span>` : ''}</div>
     <span class="st">${c.estado === 'OCUPADA' ? '' : esc(c.estado === 'SIN DATO' ? 's/d' : c.estado === 'RESERVADA' ? 'reservada' : c.estado.toLowerCase())}</span>
     <div class="pt">${c.reserva ? 'Reservada ' + esc(c.reserva) : nm(c.paciente)}</div>${a ? aislTag(c.aisl) : ''}${c.pasa ? ' <span class="tag p">→ ' + esc(c.pasa) + '</span>' : ''}</div>`;
 }
