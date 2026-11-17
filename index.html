@@ -510,7 +510,7 @@ const L = (() => {
       const hm = norm(r[I.hora] instanceof Date ? r[I.hora].toTimeString() : r[I.hora]).match(/^(\d{1,2}):(\d{2})/);
       // "Guardia Lanari", "Guardia externa Lanari" y "Lanari" son el mismo lugar
       const dondeRaw = norm(r[I.donde]); let donde = dondeRaw;
-      if (/lanari/i.test(donde) && !/^(hospital|ambulancia)/i.test(donde)) donde = 'Guardia Lanari';
+      if ((/lanari/i.test(donde) || /^guardia externa\b|instituto a\.?\s*$/i.test(donde)) && !/^(hospital|ambulancia)/i.test(donde)) donde = 'Guardia Lanari';
       // Cualquier ambulancia (empresa y móvil que sea) es una ambulancia externa
       if (/^ambulancia/i.test(donde)) donde = 'Ambulancia externa';
       out.push({ n: norm(r[I.n]), fecha: f, mes: mes || (f ? f.getMonth() + 1 : null), hora: hm ? +hm[1] : null, paciente: norm(r[I.pac]), dni: norm(r[I.dni]).replace(/\D/g, ''),
