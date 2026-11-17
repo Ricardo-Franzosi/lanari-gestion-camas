@@ -150,6 +150,30 @@ function procesarMensaje_(m, th, sh, tz) {
   return [dudoso ? 'A revisar' : 'Agregado', d.paciente];
 }
 
+/**
+ * Ejecutar a mano: completa "Dónde aguardaba" en las filas que lo tienen vacío,
+ * releyendo el mail original (columna Mail) con la extracción actual. No toca nada más.
+ */
+function completarDonde() {
+  const sh = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID')).getSheetByName('RECHAZOS');
+  const v = sh.getDataRange().getValues();
+  const h = v.findIndex(r => r.indexOf('Dónde aguardaba') >= 0);
+  const cD = v[h].indexOf('Dónde aguardaba'), cM = v[h].indexOf('Mail');
+  let n = 0;
+  for (let i = h + 1; i < v.length; i++) {
+    if (String(v[i][cD]).trim() || !v[i][cM]) continue;
+    const id = String(v[i][cM]).split('/').pop();
+    try {
+      const msgs = GmailApp.getThreadById(id).getMessages();
+      for (const m of msgs) {
+        const d = extraer_(m.getSubject(), limpiarCuerpo_(m.getPlainBody()));
+        if (d.donde) { sh.getRange(i + 1, cD + 1).setValue(d.donde); n++; console.log(v[i][4] + ' → ' + d.donde); break; }
+      }
+    } catch (e) { console.warn('Fila ' + (i + 1) + ': ' + e); }
+  }
+  console.log('Completadas: ' + n);
+}
+
 /* ================= Extracción ================= */
 function extraer_(asunto, cuerpo) {
   const t = cuerpo.replace(/\s+/g, ' ').replace(/\b(Dr|Dra|Sr|Sra|Nro|N)\.\s*/g, '$1 ');
@@ -167,7 +191,9 @@ function extraer_(asunto, cuerpo) {
   const dni = (t.match(/\bDNI\s*(?:N[°º]?|nro\.?)?\s*:?\s*([\d.]{6,11})/i) || [])[1];
   const ben = (t.match(/\b(\d{9,14}\/\d{2,3})\b/) || t.match(/(?:benef\w*|afiliad\w*|beneficiari\w*)\s*(?:N[°º]?|nro)?\s*:?\s*(\d{9,16})/i) || [])[1];
   const dx = (t.match(/\b(?:dx|diagn[oó]stico(?:\s+de)?)\s*:?\s*([^.;,\n]{3,80})/i) || [])[1];
-  let donde = (t.match(/\b(?:aguarda(?:ndo)?|se encuentra|esta|está)\s+en\s+(?:la |el |su )?([^.;,\n]{3,60}?)(?=\s+(?:dx|con dx|por|con diagn)\b|[.;,\n]|$)/i) || [])[1];
+  // Lugar donde aguarda: "aguarda en", "espera en", "se encuentra en", "permanece en", "aguarda en: …" (hasta el punto)
+  let donde = (t.match(/\b(?:aguarda(?:ndo)?|espera(?:ndo)?|se encuentra|permanece|esta|está|ubicad[oa])\s+en\s*:?\s+(?:la |el |su )?([^.;\n]{3,120}?)(?=\s+(?:dx|con dx|por|con diagn)\b|\s+--|\s+secretar[ií]a de guardia|[.;\n]|$)/i) || [])[1];
+  if (donde) donde = donde.replace(/,\s*(?:dx|diagn).*$/i, '');
   // Tipo
   const tipo = /ambulancia/.test(lowAs) && !/derivacion/.test(lowAs) || /rechazo de ambulancia/.test(low) ? 'Rechazo de ambulancia'
     : /derivacion/.test(lowAs) || /derivacion/.test(low) ? 'Rechazo + pedido de derivación' : 'Rechazo conformado';
@@ -236,7 +262,7 @@ function esDuplicado_(sh, d, fecha, tz) {
 function limpiarCuerpo_(s) {
   const corte = s.search(/\n\s*(El .{5,80} escribi[oó]:|On .{5,80} wrote:|-{2,}\s*Forwarded|De:\s.+\nEnviado)/i);
   if (corte > 0) s = s.slice(0, corte);
-  return s.replace(/\n--\s*\n[\s\S]*$/, '').replace(/^>.*$/gm, '').trim();
+  return s.replace(/\n--\s*\n[\s\S]*$/, '').replace(/\n\s*--\s*$[\s\S]*/m, '').replace(/\n\s*Secretar[ií]a de guardia[\s\S]*$/i, '').replace(/^>.*$/gm, '').trim();
 }
 function apellidoAsunto_(asunto) {
   const partes = String(asunto || '').toUpperCase().replace(/^(RE|RV|FW|FWD):\s*/g, '').split(/[\/|-]/).map(x => x.trim()).filter(Boolean);
