@@ -842,6 +842,8 @@ const L = (() => {
         const elegido = Object.keys(archs).sort((x, y) => (porArch[y].modificado || '').localeCompare(porArch[x].modificado || ''))[0];
         anios[anio] = { tablas: archs[elegido], archivo: elegido, modificado: porArch[elegido].modificado, alternativos: Object.keys(archs).filter(x => x !== elegido) };
       });
+      // Nutrición y Diabetes 2020–2023 se cargaron por un pedido puntual; Corina Páez pidió usar solo desde 2024
+      if (/^Metabolismo/.test(e.nombre)) Object.keys(anios).forEach(y => { if (+y < 2024) delete anios[y]; });
       return { nombre: e.nombre, anios };
     }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }
