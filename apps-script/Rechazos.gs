@@ -258,6 +258,69 @@ function esDuplicado_(sh, d, fecha, tz) {
     ((d.dni && String(r[5]) === d.dni) || sinAcentos_(String(r[4]).toLowerCase()).indexOf(ap) === 0));
 }
 
+/**
+ * Ejecutar a mano: revisa TODOS los mails de guardia desde DESDE (no solo los últimos días) y busca
+ * rechazos que no estén en la hoja (por ejemplo, los que faltaban en la base histórica).
+ * - auditarHistorico(): solo informa en el registro de ejecución (no escribe nada).
+ * - recuperarFaltantes(): agrega los faltantes y los anota en PROCESADOS como "Recuperado".
+ * Se considera ya cargado si hay una fila con el mismo DNI o el mismo apellido entre el día anterior y el siguiente.
+ */
+function auditarHistorico() { return revisarHistorico_(false); }
+function recuperarFaltantes() { return revisarHistorico_(true); }
+function revisarHistorico_(escribir) {
+  const DESDE = '2026/01/01';
+  const props = PropertiesService.getScriptProperties();
+  const ss = SpreadsheetApp.openById(props.getProperty('SHEET_ID'));
+  const sh = ss.getSheetByName('RECHAZOS'), pr = ss.getSheetByName('PROCESADOS');
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const hechos = new Set(pr.getLastRow() > 1 ? pr.getRange(2, 1, pr.getLastRow() - 1, 1).getValues().map(r => String(r[0])) : []);
+  const filas = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 13).getValues() : [];
+  const dia = d => Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+  const cargado = (d, fecha) => {
+    const ds = [-1, 0, 1].map(k => dia(new Date(fecha.getTime() + k * 864e5)));
+    const ap = d.paciente ? sinAcentos_(d.paciente.toLowerCase().split(/[ ,]+/)[0]) : '';
+    return filas.some(r => r[1] instanceof Date && ds.indexOf(dia(r[1])) >= 0 &&
+      ((d.dni && String(r[5]).replace(/\D/g, '') === d.dni) || (ap.length > 2 && sinAcentos_(String(r[4]).toLowerCase()).indexOf(ap) >= 0)));
+  };
+  const q = 'from:' + RCFG.REMITENTE + ' (rechazo OR rchazo OR rc) after:' + DESDE;
+  const faltan = [], vistos = new Set();
+  for (let ini = 0; ; ini += 100) {
+    const ths = GmailApp.search(q, ini, 100); if (!ths.length) break;
+    ths.forEach(th => th.getMessages().forEach(m => {
+      if (vistos.has(m.getId()) || hechos.has(m.getId())) return; vistos.add(m.getId());
+      if (m.getFrom().toLowerCase().indexOf(RCFG.REMITENTE) < 0 || m.getDate() < new Date(DESDE)) return;
+      const asunto = m.getSubject() || th.getFirstMessageSubject() || '';
+      const cuerpo = limpiarCuerpo_(m.getPlainBody() || '');
+      const low = sinAcentos_((asunto + ' \n ' + cuerpo).toLowerCase());
+      if (/anul\w*\s+(?:el\s+|del\s+)?(?:rechazo|rc)\b|(?:rechazo|rc)\s+anulad|^\s*anulacion/.test(low)) return;
+      if (!/rechaz|rchaz|\brc\b/.test(low)) return;
+      const d = extraer_(asunto, cuerpo);
+      if (cargado(d, m.getDate())) return;
+      if (faltan.some(f => f.d.paciente && f.d.paciente === d.paciente && dia(f.m.getDate()) === dia(m.getDate()))) return; // reenvío del mismo día
+      faltan.push({ m, d, asunto, cuerpo });
+    }));
+    if (ths.length < 100) break;
+  }
+  faltan.sort((a, b) => a.m.getDate() - b.m.getDate());
+  console.log('Rechazos en Gmail que no están en la hoja: ' + faltan.length);
+  faltan.forEach(f => console.log(Utilities.formatDate(f.m.getDate(), tz, 'dd/MM/yyyy HH:mm') + ' · ' + (f.d.paciente || '(sin nombre)') + ' · ' + (f.d.dni || 's/DNI') + ' · ' + f.d.cat + ' · asunto: ' + f.asunto));
+  if (escribir && faltan.length) {
+    const log = [];
+    faltan.forEach(f => {
+      const dudoso = !f.d.paciente || f.d.cat === 'No especificado';
+      agregar_(sh, f.m.getDate(), tz, { ...f.d, estado: dudoso ? 'A revisar' : 'Vigente', obs: 'Recuperado del mail (faltaba en la base). ' + (dudoso ? f.cuerpo.slice(0, 160) : ''), url: 'https://mail.google.com/mail/u/0/#all/' + f.m.getId() });
+      log.push([f.m.getId(), Utilities.formatDate(f.m.getDate(), tz, "yyyy-MM-dd'T'HH:mm"), 'Recuperado', f.d.paciente || '']);
+    });
+    pr.getRange(pr.getLastRow() + 1, 1, log.length, 4).setValues(log);
+    // Ordenar por fecha y hora y renumerar
+    const n = sh.getLastRow() - 1;
+    sh.getRange(2, 1, n, 15).sort([{ column: 2, ascending: true }, { column: 3, ascending: true }]);
+    sh.getRange(2, 1, n, 1).setValues(Array.from({ length: n }, (_, i) => [i + 1]));
+    console.log('Agregados y hoja ordenada: ' + faltan.length);
+  }
+  return faltan.length;
+}
+
 /* ================= Utilidades ================= */
 function limpiarCuerpo_(s) {
   const corte = s.search(/\n\s*(El .{5,80} escribi[oó]:|On .{5,80} wrote:|-{2,}\s*Forwarded|De:\s.+\nEnviado)/i);
