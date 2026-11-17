@@ -225,7 +225,6 @@ label.btn{display:inline-block}
     <a href="#estadisticas">Estadísticas</a>
     <a href="#facturacion">Facturación PAMI</a>
     <a href="#obrassociales">Facturación OS</a>
-    <a href="#cambios" id="navCambios" hidden>Cambios</a>
   </nav>
 </header>
 <div class="ddmenu" id="ddGestion" hidden></div>
@@ -978,7 +977,7 @@ async function fetchData(manual) {
       if (r.error === 'sesion_vencida') { SES = null; saveSes(); DATA = null; return loginView('mail', '', ERR.sesion_vencida); }
       throw new Error(ERR[r.error] || r.error);
     }
-    FOTOS = r.fotos || {}; ADMIN = !!r.admin; $('#navCambios').hidden = !ADMIN;
+    FOTOS = r.fotos || {}; ADMIN = !!r.admin;
     load(r.hojas, 'Planilla en vivo', r.generado);
     setUserUI();
   } catch (e) {
@@ -999,7 +998,7 @@ function setUserUI() {
 }
 $('#btnRefresh').onclick = () => { ESTAD = null; estError = ''; FACT = null; factError = ''; fetchData(true); };
 $('#btnOut').onclick = async () => {
-  document.body.classList.remove('auth'); const t = SES && SES.token; SES = null; saveSes(); DATA = null; ESTAD = null; FACT = null; ADMIN = false; COPIAS = null; CMP = { fecha: null, datos: null, cargando: false, error: '' }; $('#navCambios').hidden = true; clearTimeout(refreshTimer);
+  document.body.classList.remove('auth'); const t = SES && SES.token; SES = null; saveSes(); DATA = null; ESTAD = null; FACT = null; ADMIN = false; clearTimeout(refreshTimer);
   $('#fresh').textContent = 'Sesión cerrada';
   loginView('mail');
   if (t) try { await api({ action: 'logout', token: t }); } catch (e) {}
@@ -1017,8 +1016,8 @@ $('#fileIn').onchange = async ev => {
 $('#btnPriv').onclick = () => { PRIV = !PRIV; try { localStorage.setItem('lanari_priv', PRIV ? '1' : '0'); } catch (e) {} render(); };
 
 /* ---------- Render ---------- */
-const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas', 'facturacion', 'obrassociales', 'cambios'];
-let ADMIN = false, COPIAS = null, CMP = { fecha: null, datos: null, cargando: false, error: '' };
+const VIEWS = ['mapa', 'movimientos', 'espera', 'indicadores', 'solicitud', 'rechazos', 'estadisticas', 'facturacion', 'obrassociales'];
+let ADMIN = false;
 const GESTION = [['solicitud', 'Solicitud de internación'], ['movimientos', 'Movimientos y agenda'], ['espera', 'Espera y suspensiones'], ['indicadores', 'Indicadores']];
 let ULT_GESTION = 'solicitud', FOTOS = {};
 /* Responsables de cada área (las fotos llegan del servidor sólo con sesión iniciada) */
@@ -1057,53 +1056,6 @@ function registrarVista(v) {
   const disp = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'Celular/tablet' : 'Computadora';
   api({ action: 'vista', token: SES.token, vista: v, disp }).catch(() => {});
 }
-/* ---- Cambios: copia diaria guardada vs. estado actual (solo administradores) ---- */
-async function cargarCopias() {
-  if (CMP.cargando) return; CMP.cargando = true; CMP.error = '';
-  try {
-    if (!COPIAS) { const r = await api({ action: 'copias', token: SES.token }); if (!r.ok) throw new Error(ERR[r.error] || r.error); COPIAS = r.fechas; }
-    if (COPIAS.length && !CMP.fecha) CMP.fecha = COPIAS[0];
-    if (CMP.fecha && (!CMP.datos || CMP.datos.fecha !== CMP.fecha)) {
-      const r = await api({ action: 'copia', token: SES.token, fecha: CMP.fecha }); if (!r.ok) throw new Error(ERR[r.error] || r.error);
-      CMP.datos = { fecha: r.fecha, generado: r.generado, A: L.analizar(r.hojas) };
-    }
-  } catch (e) { CMP.error = e.message; }
-  finally { CMP.cargando = false; if (view() === 'cambios') render(); }
-}
-function vCambios() {
-  if (CMP.error) return `<div class="state"><h2>Cambios</h2><p>${esc(CMP.error)}</p><div><button class="btn pri" id="cmpRetry">Reintentar</button></div></div>`;
-  if (!COPIAS || (COPIAS.length && (!CMP.datos || CMP.datos.fecha !== CMP.fecha))) { setTimeout(cargarCopias, 0); return `<div class="state"><h2>Cargando la copia guardada…</h2></div>`; }
-  if (!COPIAS.length) return `<div class="state"><h2>Todavía no hay copias diarias</h2><p>La copia se guarda todos los días a las 7:00.</p></div>`;
-  const A = CMP.datos.A, B = DATA;
-  const P = (s, dni) => PRIV ? nm(s, dni) : esc(s);
-  const est = c => c ? `${esc(c.estado.toLowerCase())}${c.paciente ? ' · ' + P(c.paciente) : ''}${c.aisl && c.aisl !== 'SIN AISLAMIENTO' && c.aisl !== 'NO' ? ' · aisl.' : ''}` : '<span class="note" style="margin:0">no figura</span>';
-  const ids = [...new Set([...Object.keys(A.listado.camas), ...Object.keys(B.listado.camas)])];
-  const camas = ids.map(id => ({ id, a: A.listado.camas[id], b: B.listado.camas[id] })).filter(x => !x.a || !x.b || x.a.estado !== x.b.estado || x.a.paciente !== x.b.paciente || x.a.aisl !== x.b.aisl);
-  const sect = B.camas.sect.map(s => { const o = A.camas.sect.find(x => x.nombre === s.nombre) || {}; return { n: s.nombre, la: o.libres, lb: s.libres, oa: o.ocup, ob: s.ocup }; });
-  const kP = p => p.fila + '|' + p.nombre;
-  const pa = new Map(A.pedidos.map(p => [kP(p), p]));
-  const pedNuevos = B.pedidos.filter(p => !pa.has(kP(p)));
-  const pedCamb = B.pedidos.filter(p => { const o = pa.get(kP(p)); return o && (o.motivo !== p.motivo || o.obs !== p.obs || F(o.ing) !== F(p.ing)); }).map(p => ({ p, o: pa.get(kP(p)) }));
-  const ra = new Map((A.rechazos || []).map(r => [r.n, r])), rb = B.rechazos || [];
-  const rNuevos = rb.filter(r => !ra.has(r.n)), rCamb = rb.filter(r => ra.has(r.n) && (ra.get(r.n).vigente !== r.vigente || (ra.get(r.n).donde || '') !== (r.donde || '')));
-  const d = (x, y) => x == null ? '—' : x === y ? `${y}` : `${x} → <b>${y}</b>`;
-  const gen = CMP.datos.generado ? new Date(CMP.datos.generado) : null;
-  return `<div class="card"><h2>Cambios en el tablero</h2>
-    <div class="rfil"><b>Comparar la copia del</b><select id="cmpFecha">${COPIAS.map(f => `<option ${f === CMP.fecha ? 'selected' : ''} value="${f}">${f.split('-').reverse().join('/')}</option>`).join('')}</select>
-      <span class="note" style="margin:0">guardada ${gen ? gen.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : ''} · contra el estado actual de las planillas.</span></div>
-    <div class="kpis">${sect.map(s => `<div class="kpi"><b>${d(s.la, s.lb)}</b><span>Libres · ${esc(s.n)}</span></div>`).join('')}
-      <div class="kpi"><b>${camas.length}</b><span>Camas con cambios</span></div><div class="kpi"><b>${pedNuevos.length}</b><span>Pedidos nuevos</span></div><div class="kpi"><b>${rNuevos.length}</b><span>Rechazos nuevos</span></div></div></div>
-    <div class="card"><h2>Camas (${camas.length})</h2>${camas.length ? `<div class="tw"><table><tr><th>Cama</th><th>Antes</th><th>Ahora</th></tr>${camas.map(x => `<tr><td class="mono"><b>${esc(x.id)}</b></td><td>${est(x.a)}</td><td>${est(x.b)}</td></tr>`).join('')}</table></div>` : '<p class="note">Sin cambios.</p>'}</div>
-    <div class="card"><h2>Pedidos de internación nuevos (${pedNuevos.length})</h2>${pedNuevos.length ? `<div class="tw"><table><tr><th>Paciente</th><th>Obra social</th><th>Ingreso</th><th>Motivo</th></tr>${pedNuevos.map(p => `<tr><td>${P(p.nombre, p.dni)}</td><td>${esc(p.os)}</td><td class="mono">${p.ing ? F(p.ing) : '—'}</td><td>${esc(p.motivo || '—')}</td></tr>`).join('')}</table></div>` : '<p class="note">No hay.</p>'}
-      ${pedCamb.length ? `<h2 style="margin-top:14px">Pedidos modificados (${pedCamb.length})</h2><div class="tw"><table><tr><th>Paciente</th><th>Ingreso</th><th>Motivo / observaciones antes</th><th>Ahora</th></tr>${pedCamb.map(({ p, o }) => `<tr><td>${P(p.nombre, p.dni)}</td><td class="mono">${d(o.ing ? F(o.ing) : '—', p.ing ? F(p.ing) : '—')}</td><td>${esc([o.motivo, o.obs].filter(Boolean).join(' · ') || '—')}</td><td>${esc([p.motivo, p.obs].filter(Boolean).join(' · ') || '—')}</td></tr>`).join('')}</table></div>` : ''}</div>
-    <div class="card"><h2>Rechazos de guardia nuevos (${rNuevos.length})</h2>${rNuevos.length ? `<div class="tw"><table><tr><th>Fecha</th><th>Paciente</th><th>Motivo</th><th>Dónde aguardaba</th></tr>${rNuevos.map(r => `<tr><td class="mono">${r.fecha ? F(r.fecha) : '—'} ${r.hora != null ? r.hora + 'h' : ''}</td><td>${P(r.paciente, r.dni)}</td><td>${esc(r.motivo || r.cat || '—')}</td><td>${esc(r.dondeRaw || '—')}</td></tr>`).join('')}</table></div>` : '<p class="note">No hay.</p>'}
-      ${rCamb.length ? `<p class="note">Rechazos modificados (anulados o con lugar completado): ${rCamb.map(r => P(r.paciente, r.dni)).join(', ')}.</p>` : ''}</div>
-    <p class="note">Copia diaria a las 7:00 de la planilla de camas y de rechazos, en una carpeta privada de tu Drive; se conserva 24 horas (cada copia reemplaza a la anterior). Solo vos ves esta pestaña.</p>`;
-}
-function bindCambios() {
-  const s = $('#cmpFecha'); if (s) s.onchange = () => { CMP.fecha = s.value; CMP.datos = null; render(); };
-  const r = $('#cmpRetry'); if (r) r.onclick = () => { CMP.error = ''; COPIAS = null; render(); };
-}
 function render() {
   $('#btnPriv').textContent = PRIV ? 'Mostrar nombres' : 'Ocultar nombres';
   const v = view();
@@ -1112,14 +1064,12 @@ function render() {
   $('#navGestion').setAttribute('href', '#' + ULT_GESTION);
   if (!DATA) return;
   registrarVista(v);
-  if (v === 'cambios' && !ADMIN) { location.hash = 'mapa'; return; }
-  const vista = ({ cambios: vCambios, mapa: () => areaCard('gestion', '', true) + vMapa(), movimientos: vMov, espera: vEspera, indicadores: vInd, solicitud: vSolicitud, rechazos: vRech, estadisticas: vEst, facturacion: vFact, obrassociales: vOS })[v]();
+  const vista = ({ mapa: () => areaCard('gestion', '', true) + vMapa(), movimientos: vMov, espera: vEspera, indicadores: vInd, solicitud: vSolicitud, rechazos: vRech, estadisticas: vEst, facturacion: vFact, obrassociales: vOS })[v]();
   $('#main').innerHTML = GESTION.some(g => g[0] === v) ? cabGestion(v) + vista : vista;
   if (v === 'rechazos') bindRech();
   if (v === 'estadisticas') bindEst();
   if (v === 'facturacion') bindFact();
   if (v === 'obrassociales') bindOS();
-  if (v === 'cambios') bindCambios();
   bindTips();
 }
 const cls = s => String(s).replace(/\s+/g, '_');
