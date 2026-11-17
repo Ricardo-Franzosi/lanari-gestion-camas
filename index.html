@@ -79,6 +79,7 @@ main{padding:18px 20px 40px;max-width:1500px;margin:0 auto}
 .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px}
 .tag.a{background:var(--aisl);color:#fff}
 .tag.p{background:var(--pase);color:#fff}
+body:not(.auth) #nav,body:not(.auth) #btnPriv,body:not(.auth) #ddGestion{display:none!important}
 .sx{display:inline-block;font:700 10px/15px system-ui,sans-serif;width:15px;text-align:center;border-radius:50%;color:#fff;vertical-align:1px}.sx.F{background:#c2569b}.sx.M{background:#3a72c4}.sx.X{background:#7a6aa8;width:auto;padding:0 5px;border-radius:8px}.sx.para{width:auto;padding:0 5px;border-radius:8px}.sx.D{background:#999}.sx.R,.sx.inc{background:#c0392b}
 .tag.w{background:#fdf1dc;color:#8a5a12}
 .tag.g{background:#e3f4ea;color:#17673f}
@@ -870,8 +871,6 @@ if (typeof module !== 'undefined') module.exports = L;
 
 </script>
 <script>
-const SHEET_ID = '1L19hyfd_YLGOj_i8JP092XHVeFHASh973aiVOFMozew';
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
 let DATA = null, SRC = '', PRIV = false;
 
 try { PRIV = localStorage.getItem('lanari_priv') === '1'; } catch (e) {}
@@ -902,6 +901,7 @@ function bookFromWorkbook(wb) {
   return book;
 }
 function load(book, src, when) {
+  document.body.classList.add('auth');
   DATA = L.analizar(book); SRC = src;
   when = when ? new Date(when) : new Date();
   $('#fresh').innerHTML = esc(src) + ' · ' + when.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -927,6 +927,7 @@ function showState(title, msg, actions) {
 const upLabel = '<label class="btn" for="fileIn">Cargar export (.xlsx)</label>';
 
 function loginView(step, email, msg) {
+  document.body.classList.remove('auth');
   setUserUI();
   const err = msg ? `<p class="lerr">${esc(msg)}</p>` : '';
   $('#main').innerHTML = step === 'code' ? `
@@ -997,7 +998,7 @@ function setUserUI() {
 }
 $('#btnRefresh').onclick = () => { ESTAD = null; estError = ''; FACT = null; factError = ''; fetchData(true); };
 $('#btnOut').onclick = async () => {
-  const t = SES && SES.token; SES = null; saveSes(); DATA = null; ESTAD = null; FACT = null; ADMIN = false; COPIAS = null; CMP = { fecha: null, datos: null, cargando: false, error: '' }; $('#navCambios').hidden = true; clearTimeout(refreshTimer);
+  document.body.classList.remove('auth'); const t = SES && SES.token; SES = null; saveSes(); DATA = null; ESTAD = null; FACT = null; ADMIN = false; COPIAS = null; CMP = { fecha: null, datos: null, cargando: false, error: '' }; $('#navCambios').hidden = true; clearTimeout(refreshTimer);
   $('#fresh').textContent = 'Sesión cerrada';
   loginView('mail');
   if (t) try { await api({ action: 'logout', token: t }); } catch (e) {}
