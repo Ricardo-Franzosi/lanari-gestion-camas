@@ -708,7 +708,7 @@ const L = (() => {
   }
   const ESPEC = [[/^traumato/, 'Traumatología'], [/^neuroc/, 'Neurocirugía'], [/^neumo/, 'Neumonología'], [/^nefro/, 'Nefrología'], [/^gastro/, 'Gastroenterología'],
     [/^onco/, 'Oncología'], [/^endocrino/, 'Endocrinología'], [/^cardio/, 'Cardiología'], [/^hemato/, 'Hematología y Reumatología'], [/^imagen/, 'Imágenes'],
-    [/^neuro/, 'Neurología'], [/^serv/, 'Servicio Social'], [/paliativ/, 'Cuidados Paliativos'], [/^metabol/, 'Metabolismo / Nutrición y Diabetes'], [/^cirug/, 'Cirugía'], [/^nutric/, 'Metabolismo / Nutrición y Diabetes']];
+    [/^neuro/, 'Neurología'], [/^serv/, 'Servicio Social'], [/paliativ/, 'Cuidados Paliativos'], [/^metabol/, 'Metabolismo / Nutrición y Diabetes'], [/^cirug/, 'Cirugía'], [/^nutric/, 'Metabolismo / Nutrición y Diabetes'], [/^clinica medica/, 'Clínica Médica']];
   function nombreEspecialidad(titulo) {
     let t = norm(titulo).replace(/\.xlsx$/i, '').replace(/^(estad[ií]sticas|esta?\.)\s*/i, '').replace(/[\s\d\-–]+$/g, '').trim();
     const k = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -1860,10 +1860,10 @@ const SERVICIOS = [
   { n: 'Neurología', c: /^neurolog/i, de: /neurolog/i, esp: 'Neurología', prac: /practica/i },
   { n: 'Endocrinología', c: /^(endocrinolog|control de conducta endocrino)/i, de: /endocrino/i },
   { n: 'Metabolismo / Nutrición y Diabetes', c: /^(metabolismo|control de conducta metabol|nutrici)/i, de: /metabolismo/i },
-  { n: 'Clínica Médica', c: /^cl[ií]nica m[eé]dica$/i, de: /(cl[ií]nica m[eé]dica|pre\.? ?q)/i },
+  { n: 'Clínica Médica', c: /^(cl[ií]nica m[eé]dica$|pre-?\s*quir[uú]rgico cl[ií]nica)/i, de: /(cl[ií]nica m[eé]dica|pre\.? ?q)/i },
   { n: 'Oncología', c: /^(oncolog|cl[ií]nica m[eé]dica oncol)/i, de: /oncolog/i },
   { n: 'Cuidados Paliativos', c: /^(cuidados paliativos|consultorio dolor)/i, de: /pal[ei]ativ/i },
-  { n: 'Gastroenterología', c: /^(gastroenterolog|consultorio cpre)/i, de: /gastroenterolog/i, cir: /^gastroenterolog/i },
+  { n: 'Gastroenterología', c: /^(gastroenterolog|consultorio cpre|pre-?\s*quir[uú]rgico gastro)/i, de: /gastroenterolog/i, cir: /^gastroenterolog/i },
   { n: 'Infectología', c: /^infectolog/i, de: /infectolog/i },
   { n: 'Nefrología', c: /^(nefrolog|poliquistosis)/i, de: /nefrolog/i },
   { n: 'Salud Mental', c: /^salud mental/i },
