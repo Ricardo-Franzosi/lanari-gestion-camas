@@ -131,7 +131,11 @@ function procesarMensaje_(m, th, sh, tz) {
   // Anulación
   if (/anul\w*\s+(?:el\s+|del\s+)?(?:rechazo|rc)\b|(?:rechazo|rc)\s+anulad|^\s*anulacion/.test(low)) {
     const ap = apellidoAsunto_(asunto) || apellidoAsunto_(th.getFirstMessageSubject() || '');
-    const fila = buscarVigente_(sh, ap, fecha);
+    let fila = buscarVigente_(sh, ap, fecha);
+    if (!fila) { // respaldo: apellido en el cuerpo ("anulación del rechazo del paciente Ramos Eduardo")
+      const mb = sinAcentos_(cuerpo).match(/(?:paciente|pte\.?|sr\.?|sra\.?)\s+([A-Za-z]{3,})/i);
+      if (mb) fila = buscarVigente_(sh, mb[1], fecha);
+    }
     if (fila) {
       sh.getRange(fila, 13).setValue('Anulado');
       sh.getRange(fila, 14).setValue('Anulado por mail del ' + Utilities.formatDate(fecha, tz, 'dd/MM/yyyy') + ': ' + cuerpo.slice(0, 160));
@@ -333,7 +337,9 @@ function apellidoAsunto_(asunto) {
   const ruido = /^(LANARI|LANRI|LANARO|CABA|RC|RECHAZO|RECHAZOS|DERIVACION|DERIVACIÓN|AMBULANCIA|ANULACION|ANULACIÓN|ANULACION RECHAZO|CONFORMADO)$/;
   const cand = partes.filter(p => !ruido.test(p));
   let ap = cand.length ? cand[cand.length - 1] : '';
-  ap = ap.replace(/^(ANULACI[OÓ]N\s+)?(DE\s+)?RECHAZO\s+/, '').trim();
+  // "ANULACION RECHAZO RAMOS", "ANULACION DEL RECHAZO DE RAMOS", "ANULACIÓN DE RC DEL PACIENTE RAMOS", "RECHAZO ANULADO RAMOS"…
+  ap = ap.replace(/^(ANULACI[OÓ]N|ANULA(DO|R)?)\s+/, '').replace(/^(DE|DEL|EL)\s+/, '').replace(/^(RECHAZO|RC)(\s+ANULADO)?\s+/, '')
+    .replace(/^(DE|DEL)\s+/, '').replace(/^(LA\s+|EL\s+)?PACIENTE\s+/, '').trim();
   return ap;
 }
 function sinAcentos_(s) { return String(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); }
