@@ -720,7 +720,7 @@ const L = (() => {
         R(Y).forEach((nom, t) => {
           const orig = t.tituloPlanilla || t.titulo;
           t.titulo = nom; t.partes = [nom]; t.ambigua = false; t.dudosa = false;
-          t.tituloOrigen = 'según Estadística' + (sA(orig) !== sA(nom) ? ' (en la planilla: «' + orig + '»)' : '');
+          t.tituloOrigen = (e.nombre === 'Hematología' && nom === 'Hospital de día' ? 'deducido del orden de las tablas que describió Estadística; no confirmado' : 'según Estadística') + (sA(orig) !== sA(nom) ? ' (en la planilla: «' + orig + '»)' : '');
           const g = filaGen(G, nom, e.nombre); t.difGeneral = null; t.coincideGeneral = false;
           if (g) { const n = Math.max(...t.filas.map(f => f.meses.reduce((m, v, i) => v ? i + 1 : m, 0)), 0);
             const tp = Array.from({ length: n }, (_, i) => t.filas.reduce((s, f) => s + (f.meses[i] || 0), 0)), gp = Array.from({ length: n }, (_, i) => g.meses[i] || 0);
