@@ -692,6 +692,45 @@ const L = (() => {
         });
       });
     });
+    // Títulos según lo informado por Estadística (Corina Páez, 17-20/11/2026). Reemplaza la marca «En revisión»:
+    // la tabla queda con su nombre y, si no coincide con la planilla general, se muestra la diferencia.
+    const sA = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const REGLAS = {
+      'Hematología': (Y) => { // tras «Consultas/Consulta por médico» vienen hospital de día, hemostasia (laboratorio) y procedimientos
+        const xs = Y.tablas.filter(t => !/^consultas? por m|demanda/i.test(sA(t.tituloPlanilla || t.titulo)));
+        return new Map(xs.map((t, i) => [t, ['Hospital de día', 'Hemostasia y trombosis', 'Procedimientos hematológicos'][i]]).filter(e => e[1]));
+      },
+      'Oncología': (Y) => { const xs = Y.tablas.filter(t => /x pac|hosp\.? de d/.test(sA(t.tituloPlanilla || t.titulo)) || /^demanda|^hospital de d/.test(sA(t.titulo)));
+        return new Map(xs.map(t => [t, /hosp/.test(sA(t.tituloPlanilla || t.titulo)) || sumT(t) > 150 ? 'Hospital de día' : 'Demanda espontánea'])); },
+      'Endocrinología': (Y) => new Map(Y.tablas.map(t => { const o = sA(t.tituloPlanilla || t.titulo);
+        return [t, /consult\.? x pac/.test(o) ? 'Demanda espontánea' : /pac\.? x medico/.test(o) ? 'Control de conducta' : null]; }).filter(e => e[1])),
+      'Reumatología': (Y) => new Map(Y.tablas.map(t => { const o = sA(t.tituloPlanilla || t.titulo);
+        return [t, /estudio x pac/.test(o) ? 'Capilaroscopía' : /consult\.? x pac/.test(o) ? 'Demanda espontánea' : null]; }).filter(e => e[1]))
+    };
+    function sumT(t) { return t.filas.reduce((s, f) => s + f.meses.reduce((a, v) => a + (v || 0), 0), 0); }
+    const filaGen = (G, nom, esp) => { if (!G) return null; const e4 = sA(esp).slice(0, 5), d = G.datos;
+      if (nom === 'Hospital de día') return d.hospDia.find(r => sA(r.label).includes(e4.slice(0, 4)));
+      if (nom === 'Hemostasia y trombosis') return d.estudios.find(r => /hemostasia/.test(sA(r.label)));
+      if (nom === 'Capilaroscopía') return d.estudios.find(r => /capilaroscop/.test(sA(r.label)));
+      if (nom === 'Demanda espontánea') return d.consultas.find(r => /^dema[nm]?[dt]a esp/.test(sA(r.label)) && sA(r.label).includes(e4.slice(0, 4)));
+      if (nom === 'Control de conducta') return d.consultas.find(r => /control de conducta/.test(sA(r.label)) && sA(r.label).includes(e4.slice(0, 4)));
+      return null; };
+    especialidades.forEach(e => { const R = REGLAS[e.nombre]; if (!R) return;
+      Object.entries(e.anios).forEach(([y, Y]) => { const G = lista.find(a => a.anio === +y);
+        R(Y).forEach((nom, t) => {
+          const orig = t.tituloPlanilla || t.titulo;
+          t.titulo = nom; t.partes = [nom]; t.ambigua = false; t.dudosa = false;
+          t.tituloOrigen = 'según Estadística' + (sA(orig) !== sA(nom) ? ' (en la planilla: «' + orig + '»)' : '');
+          const g = filaGen(G, nom, e.nombre); t.difGeneral = null; t.coincideGeneral = false;
+          if (g) { const n = Math.max(...t.filas.map(f => f.meses.reduce((m, v, i) => v ? i + 1 : m, 0)), 0);
+            const tp = Array.from({ length: n }, (_, i) => t.filas.reduce((s, f) => s + (f.meses[i] || 0), 0)), gp = Array.from({ length: n }, (_, i) => g.meses[i] || 0);
+            const st = tp.reduce((a, b) => a + b, 0), sg = gp.reduce((a, b) => a + b, 0);
+            if (tp.every((v, i) => v === gp[i])) t.coincideGeneral = g.label;
+            else t.difGeneral = { label: g.label, gen: sg, esp: st, meses: tp.map((v, i) => v !== gp[i] ? i : -1).filter(i => i >= 0).length };
+          }
+        });
+      });
+    });
     return lista.length || especialidades.length ? { anios: lista, giro: giroUnico, meta, especialidades } : null;
   }
   // ---------- Planillas por especialidad (genérico) ----------
@@ -2035,6 +2074,8 @@ function tarjetaTabla(t, p, k, filasFiltro, nEsp) {
   return `<div class="card esp-card${t.ambigua ? ' revision' : ''}"><h2>${esc(t.titulo)}</h2>
     ${t.ambigua ? `<p class="warn" style="background:#fdecea;border-color:#f1b0a8;color:#8a1f12"><b>En revisión</b></p>` : ''}
     <div class="sub">${EF.espAnio} · ${per}${t.hoja ? ' · hoja «' + esc(t.hoja) + '»' : ''}</div>
+    ${typeof t.coincideGeneral === 'string' && /^según Estadística/.test(t.tituloOrigen || '') ? `<div class="sub" style="color:#1f7a4d">✓ Coincide mes a mes con «${esc(t.coincideGeneral)}» de la planilla general.</div>` : ''}
+    ${t.difGeneral ? `<div class="sub" style="color:#8a5a00">≠ Planilla general («${esc(t.difGeneral.label)}»): ${fmtN(t.difGeneral.gen)} · esta planilla: ${fmtN(t.difGeneral.esp)} (${t.difGeneral.meses} ${t.difGeneral.meses === 1 ? 'mes distinto' : 'meses distintos'}).</div>` : ''}
     ${t.tituloOrigen && !t.ambigua ? `<div class="sub" style="font-style:italic">Título asignado: ${esc(t.tituloOrigen)}.</div>` : typeof t.coincideGeneral === 'string' ? `<div class="sub" style="color:#1f7a4d">✓ Coincide mes a mes con «${esc(t.coincideGeneral)}» de la planilla general.</div>` : ''}
     <div class="esp-kpi"><b>${fmtN(tot)}</b>${p ? delta(tot, totP) : '<span class="delta eq">sin año anterior para comparar</span>'}</div>
     ${lineChart([...(p ? [{ name: String(EF.espAnio - 1), vals: serieTabla(p, 12), color: '#9aa7a1', dash: true, w: 1.8 }] : []), { name: String(EF.espAnio), vals: serieTabla(t, n), color: '#0f5e6e', w: 2.6 }], { H: 150 })}
